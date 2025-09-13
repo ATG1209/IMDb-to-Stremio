@@ -72,4 +72,11 @@ function parseRatings(csv: string): RatingItem[] {
   }));
 }
 
-module.exports = { parseWatchlist, parseRatings };
+// General CSV parsing function
+export async function parseCSV(filePath: string): Promise<WatchlistItem[]> {
+  const fs = await import('fs/promises');
+  const content = await fs.readFile(filePath, 'utf8');
+  return parseWatchlist(content);
+}
+
+export { parseWatchlist, parseRatings };
