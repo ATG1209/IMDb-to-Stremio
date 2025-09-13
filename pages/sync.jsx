@@ -287,7 +287,7 @@ export default function SyncPage() {
                 
                 <div className="flex items-center gap-3">
                   <code className="rounded bg-gray-100 px-2 py-1 text-xs dark:bg-gray-800">GET</code>
-                  <code className="flex-1">/api/stremio/manifest</code>
+                  <code className="flex-1">/api/stremio/manifest.json</code>
                   <span className="text-gray-600 dark:text-gray-400">Stremio addon manifest</span>
                 </div>
                 
@@ -301,7 +301,7 @@ export default function SyncPage() {
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
                 <p className="text-sm text-blue-800 dark:text-blue-200">
                   <strong>Stremio Addon URL:</strong> Use <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">
-                    {typeof window !== 'undefined' ? window.location.origin : 'your-domain'}/api/stremio/manifest
+                    {typeof window !== 'undefined' ? window.location.origin : 'your-domain'}/api/stremio/manifest.json
                   </code> to install this as a Stremio addon.
                 </p>
               </div>

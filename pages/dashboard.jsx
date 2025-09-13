@@ -137,7 +137,7 @@ export default function Dashboard() {
   };
 
   const filteredItems = getFilteredAndSortedWatchlist();
-  const addonUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/stremio/manifest` : '';
+  const addonUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/stremio/manifest.json` : '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">

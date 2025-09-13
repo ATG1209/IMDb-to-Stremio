@@ -180,14 +180,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 py-8">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Built with Next.js & Tailwind CSS
-          </p>
-        </div>
-      </footer>
+      {/* Footer removed as requested */}
     </div>
   );
 }
