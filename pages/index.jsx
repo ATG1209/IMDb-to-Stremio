@@ -131,6 +131,11 @@ export default function Home() {
       <footer className="pb-10">
         <div className="container text-center text-xs text-gray-500 dark:text-gray-400">
           Built with Next.js & Tailwind CSS
+          {process.env.NEXT_PUBLIC_COMMIT_SHA && (
+            <span className="ml-2 align-middle opacity-70" title="Commit SHA">
+              #{process.env.NEXT_PUBLIC_COMMIT_SHA}
+            </span>
+          )}
         </div>
       </footer>
     </div>
