@@ -15,7 +15,7 @@ async function handler(req, res) {
 
   try {
     const form = formidable({});
-    const [fields, files] = await form.parse(req);
+    const [_fields, files] = await form.parse(req);
     
     const result = {
       watchlist: [],

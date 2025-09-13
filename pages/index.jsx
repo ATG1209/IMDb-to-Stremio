@@ -9,8 +9,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleWatchlistUpload = (e) => setWatchlistFile(e.target.files?.[0] ?? null);
-  const handleRatingsUpload = (e) => setRatingsFile(e.target.files?.[0] ?? null);
+  // Handled via Dropzone component
 
   const handleSubmit = async (e) => {
     e.preventDefault();

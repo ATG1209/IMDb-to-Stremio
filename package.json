@@ -9,7 +9,7 @@
     "start": "next start",
     "build-cli": "tsc",
     "start-cli": "npm run build-cli && node dist/cli.js",
-    "lint": "eslint .",
+    "lint": "eslint --max-warnings=0 --ext .js,.jsx,.ts,.tsx pages src components",
     "test": "npm run build-cli && node --test tests"
   },
   "keywords": [],
