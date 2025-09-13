@@ -1,125 +1,226 @@
-# IMDb → Stremio Migrator — PRD
+**Goal**
 
-## 1) Summary
-- Build a small, reliable tool to migrate a user’s IMDb data (watchlist and ratings) into Stremio by leveraging the Trakt bridge (primary path) and exploring a direct path (secondary/experimental) if feasible.
-- First deliverable is a CLI that accepts IMDb CSV exports, previews the mapping, then imports into Trakt so Stremio can sync. Later, consider a minimal GUI.
+* Turn your IMDb Watchlist into a Stremio catalog sorted by “Last Added to IMDb.”
 
-## 2) Goals
-- Accurate transfer of IMDb watchlist and ratings into Stremio (via Trakt sync).
-- Dry‑run preview with clear unresolved items and conflict handling.
-- Idempotent, safe re‑runs; robust error reporting and resumability.
-- Minimal setup for users; small number of steps end‑to‑end.
+**Scope**
 
-## 3) Non‑Goals
-- Two‑way continuous sync (IMDb ↔ Stremio).
-- Automatic handling of all IMDb lists beyond watchlist (e.g., custom lists) in v1.
-- Building a long‑running service; this is a local, user‑run tool.
+* Import IMDb via CSV or public list URL.
+* Use IMDb “Created” date for sort.
+* Enrich with TMDB for posters and metadata.
+* Serve a Stremio add-on with catalogs:
 
-## 4) Users & Personas
-- Movie/TV enthusiast consolidating history into Stremio.
-- Power user migrating platforms who values transparency and control.
-- Privacy‑conscious user preferring local tooling, no server storage.
+  * Movies, Last Added
+  * Series, Last Added
+  * Combined, Last Added
 
-## 5) Inputs/Outputs
-- Inputs: IMDb CSV exports from the user’s account (ratings.csv, watchlist.csv). Optional: a mapping override file for edge cases.
-- Outputs (Primary): Imported data to Trakt watchlist and ratings; Stremio then syncs via its Trakt integration.
-- Outputs (Secondary/Exploratory): Direct injection into Stremio local library if a stable, documented path exists (likely out of scope for v1).
+**Out of scope**
 
-## 6) Constraints & Assumptions
-- Trakt supports `imdb` IDs and has OAuth device code flow for CLI usage.
-- Stremio already supports Trakt sync and will reflect the migrated data.
-- IMDb export schemas are reasonably stable but may change without notice.
-- Network/API rate limits and partial failures are expected; retries required.
+* Streaming availability checks.
+* Multi-user.
+* Alerts and auth.
+* Country handling.
 
-## 7) Key Requirements
-Functional
-- Parse IMDb CSVs into a normalized internal model.
-- Map titles using `imdb_id` (preferred) and fall back to search when missing.
-- Provide a dry‑run plan: counts, mapped/unmapped, duplicates, estimated ops.
-- Import to Trakt: add to watchlist; push ratings with correct values and types.
-- Idempotency: avoid duplicates; safe to re‑run; support resume after failure.
-- Reporting: summary, per‑item status, exportable log of failures.
+**Success**
 
-Non‑Functional
-- Clear CLI UX; actionable messages; no surprises.
-- Privacy‑first: keep everything local; do not store tokens or data remotely.
-- Reliable: handles pagination, throttling, and transient API errors.
+* After Sync, Stremio shows your list in correct order.
+* End to end under 60 seconds for up to 1,000 items after first run.
 
-## 8) UX Flow (CLI v1)
-1) User exports IMDb data (ratings.csv, watchlist.csv).
-2) Run CLI with paths to CSVs.
-3) Tool authenticates with Trakt using device code flow.
-4) Dry‑run preview: resolve IDs, show unmapped items and action counts.
-5) User confirms import; tool executes with retries and progress.
-6) Summary: totals, failures, next steps (e.g., open Stremio to sync Trakt).
+# System design
 
-## 9) Data Model (internal)
-- Title: `imdb_id`, `title`, `year`, `type` (movie/show), `season/episode?` (optional), `original_title?`.
-- Rating: `imdb_id`, `value` (1–10), `rated_at` (timestamp if present).
-- ImportItem: `source` (watchlist|rating), `status` (planned|mapped|imported|failed), `reason?`.
+**Components**
 
-## 10) Mapping Strategy
-- Primary key: `imdb_id` from IMDb CSV rows.
-- For missing IDs, attempt fuzzy search via Trakt by title+year+type.
-- Manual overrides: accept a user‑provided CSV/JSON mapping file to resolve tricky cases.
+* Minimal web UI for config and Sync.
+* Importer for IMDb CSV or URL.
+* Resolver for TMDB id and images.
+* Local store in JSON or SQLite.
+* Stremio add-on server that reads the store.
 
-## 11) Tech Approach
-- Language: Node.js with TypeScript (CLI focus). Alternative is Python; choose TS for ecosystem and DX.
-- CLI: `commander` (or built‑in minimal parser), device‑code OAuth for Trakt.
-- CSV parsing: `csv-parse` (or similar) with strict schema validation via `zod`.
-- HTTP: `fetch`/`undici` or `axios` with retry/backoff.
-- Structure:
-  - `src/cli.ts` — entrypoint and command wiring
-  - `src/imdb/parser.ts` — CSV readers and normalizers
-  - `src/match/index.ts` — mapping and resolution logic
-  - `src/services/trakt.ts` — OAuth and API calls (watchlist, ratings)
-  - `src/run/dryRun.ts` — preview plan and stats
-  - `src/run/import.ts` — execution with retries, progress, idempotency
-  - `src/util/logger.ts` — structured logs and reports
-- Config: `.env` for Trakt client credentials; store tokens locally (e.g., JSON keychain in user’s home) with opt‑out.
+**Data**
 
-## 12) API Surfaces (Trakt)
-- OAuth device code flow: obtain `access_token` for user.
-- Watchlist import: add movies/shows by `ids.imdb`.
-- Ratings import: set rating for movies/shows by `ids.imdb` with timestamp.
-- Rate limiting: respect headers; exponential backoff and jitter.
+* `config.json` holds IMDb URL, TMDB key, preferences.
+* `store.json` holds titles with `imdb_id`, `tmdb_id`, `type`, `title`, `year`, `imdb_added_at`.
 
-## 13) Idempotency & Safety
-- De‑duplicate by `imdb_id` before calling APIs.
-- For watchlist: check existing membership via a cached snapshot; skip existing.
-- For ratings: overwrite or upsert behavior, configurable with `--mode=skip|overwrite`.
-- Persist checkpoint state so re‑runs resume after last successful batch.
+**Ordering rule**
 
-## 14) Telemetry & Reporting
-- Console summary + write a `migration-report.json` with per‑item results.
-- Export `unmapped.csv` and `failed.csv` for user review.
+* Sort descending by `imdb_added_at`. Tie breaker by TMDB popularity.
 
-## 15) Risks & Mitigations
-- Schema drift in IMDb CSV — validate and surface clear errors; version detection.
-- Trakt throttling — implement global limiter and retry policies.
-- Unmapped/ambiguous titles — enable manual mapping and re‑runs.
-- Stremio not reflecting changes promptly — document sync steps and delays.
+# Stack
 
-## 16) Milestones
-- M0: Repo skeleton, CLI scaffold, CSV parsing, types, unit tests for parsers.
-- M1: Trakt OAuth device flow; dry‑run with mapping by `imdb_id` only.
-- M2: Watchlist import; checkpointing; basic reports.
-- M3: Ratings import; overwrite/skip modes; full reports.
-- M4: Manual overrides; fuzzy search fallback; improved logs.
-- M5: Optional minimal GUI; packaging and docs.
+* Node.js, TypeScript.
+* Fastify for HTTP.
+* Stremio Addon SDK.
+* Cheerio for IMDb HTML parsing.
+* CSV parse for IMDb exports.
+* Lowdb or SQLite. JSON is fine.
 
-## 17) Success Metrics
-- ≥95% of items imported automatically when `imdb_id` present.
-- <2% transient failure rate with automatic retry.
-- <5 minutes total for 2k items on typical connections.
+# Web UI
 
-## 18) Open Questions
-- Any must‑have support for IMDb custom lists in v1?
-- Should ratings timestamps be preserved strictly? (may affect Trakt history)
-- Default behavior for existing Trakt ratings: skip vs. overwrite?
-- Is a direct Stremio write path required, or is Trakt sufficient?
+**Routes**
 
-## 19) Future Considerations
-- Support for custom IMDb lists; reviews and comments export (if feasible).
-- Two‑way reconciliation tool (advanced users).
-- Portable migration pack: generate a file the user can re‑apply later.
+* `GET /` config form and Sync button.
+* `POST /config` save config.
+* `POST /sync` run importer and resolver. Return summary with counts and errors.
+* `GET /preview` show current ordered list.
+
+**Form fields**
+
+* IMDb list URL, optional CSV upload.
+* TMDB API key.
+* Option to include both types or filter, default include both.
+
+# Stremio add-on
+
+**Endpoints**
+
+* `GET /manifest.json`
+* `GET /catalog/movie/last-added.json`
+* `GET /catalog/series/last-added.json`
+* `GET /catalog/all/last-added.json` optional combined feed
+* `GET /meta/:type/:id.json` optional detailed meta
+
+**Manifest**
+
+* One addon with three catalogs. No streams. Only discovery metas.
+
+**Meta shape**
+
+* `id`: IMDb id like `tt1234567`
+* `type`: `movie` or `series`
+* `name`, `poster`, `year`, `description` short line like “Added to your IMDb list on 2025-09-12”
+* `imdbRating` if available from TMDB or omitted
+
+# Data model
+
+```json
+{
+  "titles": {
+    "tt0111161": {
+      "tmdb_id": 278,
+      "type": "movie",
+      "title": "The Shawshank Redemption",
+      "year": 1994,
+      "poster": "https://image.tmdb.org/t/p/w342/...",
+      "imdb_added_at": "1999-07-01T00:00:00Z",
+      "last_synced_at": "2025-09-13T10:05:00Z"
+    }
+  }
+}
+```
+
+# Import logic
+
+**CSV path**
+
+* Parse IMDb CSV. Use columns `const` and `Created`.
+* Map `const` to IMDb id. Parse `Created` to ISO date.
+
+**URL path**
+
+* Fetch list page HTML.
+* Extract `data-tconst` for items.
+* If the page shows “Date Added” per item, parse it. If not available, set `imdb_added_at` as the current sync time on first sight and persist. CSV gives true dates, so prefer CSV for accuracy.
+
+**TMDB resolution**
+
+* Use `/find/{imdb_id}` first.
+* If missing, use `/search` with title and year from the page or later metadata fetch.
+* Cache all mappings.
+
+# Sync algorithm
+
+1. Load config and store.
+2. Import IMDb items from CSV if provided, else parse URL.
+3. For each IMDb id:
+
+   * Ensure `imdb_added_at` is set. From CSV if present, else keep earliest seen.
+   * Resolve TMDB id and metadata. Save poster path, title, year, type.
+4. Save store.
+5. Build in-memory arrays:
+
+   * Movies sorted by `imdb_added_at` desc.
+   * Series sorted by `imdb_added_at` desc.
+   * Combined if enabled.
+6. Expose to Stremio with paging. Slice to `skip` and `limit` if the SDK passes those.
+
+# API contracts
+
+**POST /sync response**
+
+```json
+{
+  "imported": 742,
+  "new_items": 15,
+  "updated": 12,
+  "skipped": 0,
+  "errors": 0
+}
+```
+
+**Catalog response**
+
+```json
+{
+  "metas": [
+    { "id":"tt123", "type":"movie", "name":"...", "year":2024, "poster":"...", "description":"Added 2025-09-12" }
+  ]
+}
+```
+
+# Implementation steps
+
+**1. Scaffold**
+
+* Init TypeScript. Add Fastify and Stremio SDK.
+* Create `config.json` and `store.json`.
+
+**2. Config UI**
+
+* Plain HTML form. POST to `/config`.
+* File input for CSV. Option to clear current store.
+
+**3. Importers**
+
+* `imdbCsvImport(csvFilePath)`
+* `imdbUrlImport(url)` with Cheerio selectors for `data-tconst` and any “created” cell if present.
+
+**4. Resolver**
+
+* `resolveTmdb(imdbId, typeHint)` uses `/find/{external_id}`.
+* Fetch `name`, `year`, `poster_path`, `media_type`.
+
+**5. Store layer**
+
+* Read, write, and merge JSON.
+* Ensure idempotent updates by IMDb id.
+
+**6. Add-on**
+
+* Manifest with catalogs.
+* Catalog handlers read store, build `metas`, sort, paginate.
+
+**7. Hardening**
+
+* Input validation, timeouts, retries.
+* Log to console and to `logs/app.log`.
+
+**8. Runbook**
+
+* `npm run dev`
+* Open `http://localhost:7000/`
+* Set TMDB key, paste IMDb URL or upload CSV, click Sync.
+* In Stremio, install `http://<your-ip>:7000/manifest.json`.
+
+# Testing checklist
+
+* CSV with 10 items, verify exact sort by Created.
+* URL import only, verify first seen dates persist across syncs.
+* Mixed movies and series, verify each catalog filters correctly.
+* Missing TMDB mapping, verify fallback search or mark as unknown.
+* Large list performance, target under 60 seconds for 1,000 items.
+
+# Backlog, next
+
+* Deduplicate remakes and alternate cuts by IMDb id only.
+* Poster fallback to IMDb image if TMDB missing.
+* Manual edit page to fix an incorrect mapping.
+* Optional paging in web preview.

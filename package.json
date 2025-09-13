@@ -1,16 +1,35 @@
 {
-  "name": "imbd-to-stremio",
+  "name": "imdb-to-stremio",
   "version": "1.0.0",
   "description": "CLI tool to migrate IMDb data to Stremio via Trakt",
   "main": "dist/cli.js",
   "scripts": {
-    "build": "tsc",
-    "start": "npm run build && node dist/cli.js",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "build-cli": "tsc",
+    "start-cli": "npm run build-cli && node dist/cli.js",
     "lint": "eslint .",
-    "test": "npm run build && node --test tests"
+    "test": "npm run build-cli && node --test tests"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "formidable": "^3.5.4",
+    "next": "^15.5.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0",
+    "eslint-config-next": "^15.5.3",
+    "typescript": "5.9.2"
+  }
 }

@@ -51,7 +51,7 @@ function parseCsv(content: string): Record<string, string>[] {
   });
 }
 
-export function parseWatchlist(csv: string): WatchlistItem[] {
+function parseWatchlist(csv: string): WatchlistItem[] {
   const rows = parseCsv(csv);
   return rows.map((r) => ({
     imdbId: r.const,
@@ -61,7 +61,7 @@ export function parseWatchlist(csv: string): WatchlistItem[] {
   }));
 }
 
-export function parseRatings(csv: string): RatingItem[] {
+function parseRatings(csv: string): RatingItem[] {
   const rows = parseCsv(csv);
   return rows.map((r) => ({
     imdbId: r.const,
@@ -71,3 +71,5 @@ export function parseRatings(csv: string): RatingItem[] {
     ratedAt: r['Date Rated'] || undefined,
   }));
 }
+
+module.exports = { parseWatchlist, parseRatings };
