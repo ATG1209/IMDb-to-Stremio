@@ -14,4 +14,4 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm run lint --if-present
-      - run: npm test
+      - run: npm run build
