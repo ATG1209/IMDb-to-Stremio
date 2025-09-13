@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App-level tweaks */
+:root { color-scheme: light dark; }
+html, body, #__next { height: 100%; }
+
+/* No custom utilities yet */

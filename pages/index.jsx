@@ -1,23 +1,22 @@
 import { useState } from 'react';
+import ThemeToggle from '../components/ThemeToggle';
+import Dropzone from '../components/Dropzone';
 
 export default function Home() {
   const [watchlistFile, setWatchlistFile] = useState(null);
   const [ratingsFile, setRatingsFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleWatchlistUpload = (e) => {
-    setWatchlistFile(e.target.files[0]);
-  };
-
-  const handleRatingsUpload = (e) => {
-    setRatingsFile(e.target.files[0]);
-  };
+  const handleWatchlistUpload = (e) => setWatchlistFile(e.target.files?.[0] ?? null);
+  const handleRatingsUpload = (e) => setRatingsFile(e.target.files?.[0] ?? null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
     if (!watchlistFile && !ratingsFile) {
-      alert('Please upload at least one CSV file');
+      setError('Please upload at least one CSV file.');
       return;
     }
 
@@ -27,68 +26,113 @@ export default function Home() {
     if (ratingsFile) formData.append('ratings', ratingsFile);
 
     try {
-      const response = await fetch('/api/migrate', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await fetch('/api/migrate', { method: 'POST', body: formData });
       const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || 'Failed to process files');
       setResult(data);
-    } catch (error) {
-      setResult({ error: 'Failed to process files' });
+    } catch (err) {
+      setResult(null);
+      setError(err.message || 'Unexpected error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
+  const Stat = ({ label, value }) => (
+    <div className="flex flex-col"><span className="text-sm text-gray-500 dark:text-gray-400">{label}</span><span className="text-lg font-semibold">{value ?? 0}</span></div>
+  );
+
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '20px' }}>
-      <h1>IMDb to Stremio Migrator</h1>
-      <p>Upload your IMDb CSV exports to migrate your watchlist and ratings to Stremio via Trakt.</p>
-      
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '20px' }}>
-          <label htmlFor="watchlist">IMDb Watchlist CSV:</label>
-          <input
-            type="file"
-            id="watchlist"
-            accept=".csv"
-            onChange={handleWatchlistUpload}
-            style={{ display: 'block', marginTop: '5px' }}
-          />
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">
+      <header className="pt-16 pb-8">
+        <div className="container">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-600">IMDb → Stremio</span>{' '}
+                Migrator
+              </h1>
+              <p className="mt-3 max-w-2xl text-gray-600 dark:text-gray-300">
+                Upload your IMDb CSV exports to migrate your Watchlist and Ratings to Stremio via Trakt.
+              </p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
+      </header>
 
-        <div style={{ marginBottom: '20px' }}>
-          <label htmlFor="ratings">IMDb Ratings CSV:</label>
-          <input
-            type="file"
-            id="ratings"
-            accept=".csv"
-            onChange={handleRatingsUpload}
-            style={{ display: 'block', marginTop: '5px' }}
-          />
+      <main className="pb-24">
+        <div className="container">
+          <div className="mx-auto max-w-3xl rounded-xl border border-gray-200 bg-white/80 p-6 shadow-lg backdrop-blur dark:border-gray-800 dark:bg-gray-900/80">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="rounded-md border border-red-300 bg-red-50 p-3 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <Dropzone
+                id="watchlist"
+                label="IMDb Watchlist CSV"
+                file={watchlistFile}
+                onFileSelected={(f) => setWatchlistFile(f)}
+                helper="Export your Watchlist from IMDb as CSV."
+              />
+
+              <Dropzone
+                id="ratings"
+                label="IMDb Ratings CSV"
+                file={ratingsFile}
+                onFileSelected={(f) => setRatingsFile(f)}
+                helper="Optional. Export your Ratings from IMDb as CSV."
+              />
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 dark:focus:ring-offset-gray-900"
+                >
+                  {loading && (
+                    <svg className="mr-2 h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                  )}
+                  {loading ? 'Processing…' : 'Start Migration'}
+                </button>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400">CSV only. Data stays on device until upload.</p>
+              </div>
+            </form>
+
+            {result && (
+              <div className="mt-8 space-y-4">
+                <div className="flex flex-wrap items-center gap-6">
+                  <Stat label="Watchlist" value={result?.data?.stats?.watchlistCount} />
+                  <Stat label="Ratings" value={result?.data?.stats?.ratingsCount} />
+                  <div className="ml-auto rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                    {result?.success ? 'Success' : 'Completed'}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-800 dark:bg-gray-950">
+                  <div className="mb-2 font-medium text-gray-800 dark:text-gray-100">Raw Response</div>
+                  <pre className="overflow-x-auto text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+      </main>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: loading ? 'not-allowed' : 'pointer'
-          }}
-        >
-          {loading ? 'Processing...' : 'Start Migration'}
-        </button>
-      </form>
-
-      {result && (
-        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '5px' }}>
-          <h3>Result:</h3>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
+      <footer className="pb-10">
+        <div className="container text-center text-xs text-gray-500 dark:text-gray-400">
+          Built with Next.js & Tailwind CSS
         </div>
-      )}
+      </footer>
     </div>
   );
 }
