@@ -57,7 +57,7 @@ export default function Dropzone({ id, label, accept = '.csv', file, onFileSelec
           className="sr-only"
         />
         <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-          <svg viewBox="0 0 24 24" className="h-5 w-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg viewBox="0 0 24 24" width="20" height="20" className="text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 0 0 4 4h10a4 4 0 0 0 1-7.874V11a6 6 0 1 0-12 0v.126A4.002 4.002 0 0 0 3 15Z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 12v6m0-6 2.5 2.5M12 12l-2.5 2.5" />
           </svg>
@@ -71,4 +71,3 @@ export default function Dropzone({ id, label, accept = '.csv', file, onFileSelec
     </div>
   );
 }
-
