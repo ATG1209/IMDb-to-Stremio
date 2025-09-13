@@ -1,0 +1,16 @@
+{
+  "name": "imbd-to-stremio",
+  "version": "1.0.0",
+  "description": "CLI tool to migrate IMDb data to Stremio via Trakt",
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/cli.js",
+    "lint": "eslint .",
+    "test": "npm run build && node --test tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs"
+}
