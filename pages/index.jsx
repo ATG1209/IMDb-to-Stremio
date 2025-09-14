@@ -180,7 +180,14 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Footer removed as requested */}
+      {/* Version Footer */}
+      <footer className="relative z-10 py-4 mt-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Version 1.3 - IMDb Watchlist Fixed ✨
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

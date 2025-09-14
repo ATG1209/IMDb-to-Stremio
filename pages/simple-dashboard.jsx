@@ -71,7 +71,7 @@ export default function SimpleDashboard() {
     try {
       await navigator.clipboard.writeText(text);
       setSuccess('¡URL copiada al portapapeles!');
-    } catch (err) {
+    } catch (_err) {
       setError('No se pudo copiar al portapapeles');
     }
   };
@@ -286,6 +286,15 @@ export default function SimpleDashboard() {
           )}
         </div>
       </main>
+
+      {/* Version Footer */}
+      <footer className="py-4 mt-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Version 1.3 - IMDb Watchlist Fixed ✨
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

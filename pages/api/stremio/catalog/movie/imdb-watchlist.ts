@@ -1,34 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import path from 'path';
-import fs from 'fs/promises';
+import { fetchWatchlist, WatchlistItem } from '../../../../../lib/fetch-watchlist';
 
-interface WatchlistItem {
-  imdbId: string;
-  title: string;
-  year?: string;
-  type: 'movie' | 'tv';
-  poster?: string;
-  plot?: string;
-  genres?: string[];
-  addedAt: string;
-}
-
-interface WatchlistCache {
-  items: WatchlistItem[];
-  lastUpdated: string;
-  totalItems: number;
-}
-
-const CACHE_FILE = path.join(process.cwd(), 'data', 'watchlist-cache.json');
-
-async function loadWatchlistCache(): Promise<WatchlistCache | null> {
-  try {
-    const data = await fs.readFile(CACHE_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch {
-    return null;
-  }
-}
+const DEFAULT_USER_ID = process.env.DEFAULT_IMDB_USER_ID;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -42,18 +15,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Content-Type', 'application/json');
 
   try {
-    const cachedData = await loadWatchlistCache();
-    
-    if (!cachedData || !cachedData.items) {
-      return res.status(200).json({
-        metas: [],
-        cacheMaxAge: 300 // 5 minutes
-      });
+    if (!DEFAULT_USER_ID) {
+      return res.status(200).json({ metas: [], cacheMaxAge: 300 });
     }
 
-    // Convert watchlist items to Stremio catalog format
-    const metas = cachedData.items
-      .filter(item => item.type === 'movie') // Only movies for this catalog
+    const items: WatchlistItem[] = await fetchWatchlist(DEFAULT_USER_ID);
+
+    const metas = items
+      .filter(item => item.type === 'movie')
       .map(item => ({
         id: item.imdbId,
         type: 'movie',
@@ -62,23 +31,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         poster: item.poster || `https://img.omdbapi.com/?i=${item.imdbId}&apikey=placeholder`,
         description: item.plot || `Added to watchlist on ${new Date(item.addedAt).toLocaleDateString()}`,
         genres: item.genres || ['Unknown'],
-        imdbRating: undefined, // Could be fetched separately
-        
-        // Additional metadata
+        imdbRating: item.rating ? Number(item.rating) : undefined,
         watchlistAdded: item.addedAt
       }));
 
-    return res.status(200).json({
-      metas,
-      cacheMaxAge: 300 // Cache for 5 minutes
-    });
-
+    return res.status(200).json({ metas, cacheMaxAge: 300 });
   } catch (error) {
     console.error('Error serving catalog:', error);
-    return res.status(500).json({
-      error: 'Failed to load catalog',
-      metas: [],
-      cacheMaxAge: 60
-    });
+    return res.status(500).json({ error: 'Failed to load catalog', metas: [], cacheMaxAge: 60 });
   }
 }

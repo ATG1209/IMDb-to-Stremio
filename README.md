@@ -11,6 +11,16 @@ Deployment
 
 Command line tool for migrating IMDb watchlists and ratings to Stremio via Trakt.
 
+## Configuration
+
+The global Stremio catalog can pull from a default IMDb account. Create a `.env` file and set your user ID:
+
+```
+DEFAULT_IMDB_USER_ID=ur12345678
+```
+
+When no watchlist cache is present, requests to `/api/stremio/catalog/movie/imdb-watchlist.json` will fetch items from this account.
+
 ## Development
 
 Build the project:
