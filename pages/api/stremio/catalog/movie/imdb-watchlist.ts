@@ -19,7 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json({ metas: [], cacheMaxAge: 300 });
     }
 
-    const items: WatchlistItem[] = await fetchWatchlist(DEFAULT_USER_ID);
+    const force = (req.query.nocache === '1' || req.query.refresh === '1');
+    const items: WatchlistItem[] = await fetchWatchlist(DEFAULT_USER_ID, { forceRefresh: force });
 
     const metas = items
       .filter(item => item.type === 'movie')

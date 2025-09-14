@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { getTMDBPosterBatch } from './tmdb';
+import { getTMDBPosterBatch, getTMDBMetadataBatch } from './tmdb';
 
 export interface WatchlistItem {
   imdbId: string;
@@ -18,22 +18,29 @@ export interface WatchlistItem {
   addedAt: string;
 }
 
-// Simple in-memory cache per user
+// Simple in-memory cache per user with an in-flight guard
 const watchlistCache = new Map<string, { data: WatchlistItem[]; timestamp: number }>();
+const inFlight = new Map<string, Promise<WatchlistItem[]>>();
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
-export async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
-  // Clear cache for debugging
-  watchlistCache.delete(userId);
-  
+export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boolean }): Promise<WatchlistItem[]> {
+  const forceRefresh = opts?.forceRefresh === true;
+
   const cached = watchlistCache.get(userId);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     console.log(`[fetchWatchlist] Using cached data for ${userId}, ${cached.data.length} items`);
     return cached.data;
   }
 
+  // If a fetch is already running for this user, await it instead of spawning another browser
+  const existing = inFlight.get(userId);
+  if (existing) {
+    console.log(`[fetchWatchlist] Awaiting in-flight fetch for ${userId}`);
+    return existing;
+  }
+
   let browser: any = null;
-  try {
+  const task = (async () => {
     console.log(`[fetchWatchlist] Starting browser for user ${userId}`);
     browser = await chromium.launch({
       headless: true,
@@ -45,11 +52,13 @@ export async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
 
-    const watchlistUrl = `https://www.imdb.com/user/${userId}/watchlist`;
-    console.log(`[fetchWatchlist] Navigating to ${watchlistUrl}`);
-    await page.goto(watchlistUrl, { timeout: 15000 });
+    // Force a stable layout (detail view) so selectors work reliably
+    const urlDetail = `https://www.imdb.com/user/${userId}/watchlist?sort=created:desc&view=detail`;
+    const urlGrid = `https://www.imdb.com/user/${userId}/watchlist?sort=created:desc&view=grid`;
+    console.log(`[fetchWatchlist] Navigating to ${urlDetail}`);
+    await page.goto(urlDetail, { timeout: 15000 });
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1500);
 
     const pageTitle = await page.title();
     console.log(`[fetchWatchlist] Page title: ${pageTitle}`);
@@ -78,9 +87,13 @@ export async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
     
     // Wait for the watchlist to load
     try {
-      await page.waitForSelector('.lister-item, .ipc-poster, [data-testid="title-list-item"]', { timeout: 10000 });
+      await page.waitForSelector('.lister-item, .ipc-poster-card, [data-testid="title-list-item"]', { timeout: 10000 });
     } catch (e) {
-      console.log('[fetchWatchlist] No standard watchlist items found, trying alternative selectors...');
+      console.log('[fetchWatchlist] No standard selectors in detail view, trying grid view...');
+      await page.goto(urlGrid, { timeout: 15000 });
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(800);
+      await page.waitForSelector('.ipc-poster-card, a[href*="/title/"]', { timeout: 10000 }).catch(() => {});
     }
 
     // Debug: Get page structure
@@ -106,133 +119,274 @@ export async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
     
     console.log('[fetchWatchlist] Page analysis:', JSON.stringify(debugInfo, null, 2));
 
-    // Wait for content to load dynamically  
-    await page.waitForTimeout(5000);
+    // Load more by scrolling – new IMDb UI lazy-loads items
+    try {
+      await page.evaluate(async () => {
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+        let lastCount = 0;
+        let stableRounds = 0;
+        for (let i = 0; i < 15; i++) { // ~15s max
+          window.scrollTo(0, document.body.scrollHeight);
+          await sleep(800);
+          const current = document.querySelectorAll('a[href*="/title/"]').length;
+          if (current <= lastCount) {
+            stableRounds++;
+          } else {
+            stableRounds = 0;
+            lastCount = current;
+          }
+          if (stableRounds >= 3) break; // no more items loading
+        }
+        window.scrollTo(0, 0);
+      });
+    } catch (e) {
+      console.log('[fetchWatchlist] Scroll loading failed or not needed');
+    }
     
     // Create a function that runs in the browser context to extract watchlist items
-    const items = await page.evaluate(() => {
-      const results = [];
-      const processedItems = new Set();
-      
-      // Look for all title links
-      const titleLinks = Array.from(document.querySelectorAll('a[href*="/title/"]'));
-      console.log(`Processing ${titleLinks.length} title links`);
-      
-      titleLinks.forEach((link, index) => {
-        try {
-          const href = link.getAttribute('href') || '';
-          const match = href.match(/\/title\/(tt\d+)\//);
-          if (!match) return;
-          
-          const imdbId = match[1];
-          if (processedItems.has(imdbId)) return;
-          
-          const titleText = link.textContent?.trim();
-          if (!titleText || titleText.length < 2) return;
-          
-          // Skip navigation and UI links
-          if (titleText.includes('IMDb') || titleText.includes('Menu') || titleText.includes('Home')) {
-            return;
-          }
-          
-          // Clean title
-          let title = titleText.replace(/^\d+\.\s*/, '');
-          
-          // Find parent container with more info
-          let container = link.parentElement;
-          let depth = 0;
-          while (container && depth < 10) {
-            const text = container.textContent || '';
-            if (text.includes(title) && (text.includes('20') || text.includes('19'))) {
-              break;
-            }
-            container = container.parentElement;
-            depth++;
-          }
-          
-          // Extract year
-          let year = '';
-          if (container) {
-            const yearMatch = container.textContent?.match(/\b(19|20)\d{2}\b/);
-            year = yearMatch?.[0] || '';
-          }
-          
-          // Find image
-          let poster = '';
-          if (container) {
-            const img = container.querySelector('img[src*="amazon"]');
-            if (img) {
-              poster = img.src.replace(/\._V1_.*/, '._V1_UX300_CR0,0,300,450_AL_.jpg');
-            }
-          }
-          
-          // Determine type
-          const contextText = container?.textContent?.toLowerCase() || '';
-          const isTV = contextText.includes('tv series') || 
-                      contextText.includes('mini series') ||
-                      contextText.includes('series') ||
-                      href.includes('episodes');
-          
-          processedItems.add(imdbId);
-          
-          if (index < 10) {
-            console.log(`Item ${index}: ${title} (${imdbId}) - ${year}`);
-          }
-          
-          results.push({
-            imdbId,
-            title: title.replace(/\s+/g, ' ').trim(),
-            year,
-            type: isTV ? 'tv' : 'movie',
-            poster: poster || undefined,
-            addedAt: new Date().toISOString(),
-          });
-          
-        } catch (error) {
-          console.log(`Error processing link ${index}: ${error.message}`);
-        }
+    let items = await page.evaluate(() => {
+      const normalize = (arr: any[]) => arr.filter(Boolean).map((x, index) => ({
+        imdbId: x.imdbId,
+        title: (x.title || '').replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim(),
+        year: x.year,
+        type: x.type === 'tv' ? 'tv' : 'movie',
+        poster: x.poster || undefined,
+        imdbRating: x.imdbRating || 0,
+        numRatings: x.numRatings || 0,
+        runtime: x.runtime || 0,
+        popularity: x.popularity || 0,
+        userRating: x.userRating || 0,
+        // Use index to maintain scraped order (newest first from IMDb sort=created:desc)
+        // Subtract index from current time to preserve order - first item gets newest timestamp
+        addedAt: new Date(Date.now() - index * 1000).toISOString(),
+      }));
+
+      const lister = Array.from(document.querySelectorAll('.lister-item')).map((el) => {
+        const a = el.querySelector<HTMLAnchorElement>('h3 a[href*="/title/"]');
+        const href = a?.getAttribute('href') || '';
+        const id = href.match(/tt\d+/)?.[0] || '';
+        const title = a?.textContent?.trim() || '';
+        const year = (el.querySelector('.lister-item-year, .secondaryInfo')?.textContent || '').match(/(19|20)\d{2}/)?.[0];
+        const img = el.querySelector<HTMLImageElement>('img[src]');
+        const text = el.textContent?.toLowerCase() || '';
+        const type = text.includes('tv series') || text.includes('mini series') || text.includes('series') ? 'tv' : 'movie';
+        
+        // Extract rating information
+        const ratingEl = el.querySelector('.ratings-bar .inline-block strong');
+        const imdbRating = ratingEl ? parseFloat(ratingEl.textContent?.trim() || '0') || 0 : 0;
+        
+        // Extract number of ratings (votes)
+        const ratingsCountEl = el.querySelector('.sort-num_votes-visible span[name="nv"]');
+        const numRatings = ratingsCountEl ? parseInt(ratingsCountEl.textContent?.replace(/[,\s]/g, '') || '0') || 0 : 0;
+        
+        // Extract runtime
+        const runtimeEl = el.querySelector('.runtime, .text-muted .runtime');
+        const runtimeText = runtimeEl?.textContent?.trim() || '';
+        const runtime = runtimeText.match(/(\d+)\s*min/)?.[1] ? parseInt(runtimeText.match(/(\d+)\s*min/)[1]) : 0;
+        
+        // Extract user rating (if available)
+        const userRatingEl = el.querySelector('.user-rating .inline-block strong, .rate .inline-block strong');
+        const userRating = userRatingEl ? parseFloat(userRatingEl.textContent?.trim() || '0') || 0 : 0;
+        
+        // Calculate popularity based on number of ratings (simple heuristic)
+        const popularity = numRatings > 0 ? Math.log10(numRatings) * 1000 : 0;
+        
+        return id && title ? { 
+          imdbId: id, 
+          title, 
+          year, 
+          type, 
+          poster: img?.src,
+          imdbRating,
+          numRatings,
+          runtime,
+          popularity,
+          userRating
+        } : null;
       });
-      
-      console.log(`Extracted ${results.length} unique items`);
-      return results;
+
+      const ipc = Array.from(document.querySelectorAll('.ipc-poster-card')).map((el) => {
+        const a = el.querySelector<HTMLAnchorElement>('a[href*="/title/"]');
+        const href = a?.getAttribute('href') || '';
+        const id = href.match(/tt\d+/)?.[0] || '';
+        const title = (el.querySelector('[data-testid="title"]')?.textContent || a?.textContent || '').trim();
+        const meta = el.querySelector('[data-testid="metadata"]')?.textContent || '';
+        const year = meta.match(/(19|20)\d{2}/)?.[0];
+        const img = el.querySelector<HTMLImageElement>('img[src]');
+        const tagText = (el.textContent || '').toLowerCase();
+        const type = tagText.includes('series') ? 'tv' : 'movie';
+        
+        // Extract rating from metadata or rating elements
+        const ratingEl = el.querySelector('[data-testid="ratingGroup--imdb-rating"]');
+        const imdbRating = ratingEl ? parseFloat(ratingEl.textContent?.trim() || '0') || 0 : 0;
+        
+        // Extract votes/ratings count
+        const voteEl = el.querySelector('[data-testid="ratingGroup--imdb-rating"] + span');
+        const numRatings = voteEl ? parseInt(voteEl.textContent?.replace(/[(),\s]/g, '') || '0') || 0 : 0;
+        
+        // Runtime might be in metadata
+        const runtime = meta.match(/(\d+)\s*min/)?.[1] ? parseInt(meta.match(/(\d+)\s*min/)[1]) : 0;
+        
+        // Calculate popularity
+        const popularity = numRatings > 0 ? Math.log10(numRatings) * 1000 : 0;
+        
+        return id && title ? { 
+          imdbId: id, 
+          title, 
+          year, 
+          type, 
+          poster: img?.src,
+          imdbRating,
+          numRatings,
+          runtime,
+          popularity,
+          userRating: 0  // Usually not visible in poster cards
+        } : null;
+      });
+
+      let chosen = lister.length >= ipc.length ? normalize(lister) : normalize(ipc);
+
+      if (chosen.length < 3) {
+        const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/title/"]'))
+          .map((a) => {
+            const id = a.href.match(/tt\d+/)?.[0] || '';
+            const t = a.textContent?.trim() || '';
+            return id && t ? { imdbId: id, title: t } : null;
+          }).filter(Boolean);
+        chosen = normalize(links as any[]);
+      }
+      return chosen;
     });
+
+    // If we got suspiciously few items, retry once using the other view
+    if (items.length < 5) {
+      try {
+        const currentUrl = location.href;
+        // Switch view client-side by replacing query param
+      } catch {}
+      console.log(`[fetchWatchlist] Low item count (${items.length}). Retrying with alternate view...`);
+      await page.goto(items.length === 0 ? urlGrid : urlDetail, { timeout: 15000 });
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(800);
+      // Scroll again
+      try {
+        await page.evaluate(async () => {
+          const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+          for (let i = 0; i < 8; i++) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await sleep(600);
+          }
+          window.scrollTo(0, 0);
+        });
+      } catch {}
+      items = await page.evaluate(() => {
+        const results: any[] = [];
+        const processed = new Set<string>();
+        const push = (id: string, title: string, year?: string, poster?: string, typeHint?: string, 
+                      imdbRating = 0, numRatings = 0, runtime = 0, popularity = 0, userRating = 0) => {
+          if (!id || !title) return;
+          if (processed.has(id)) return;
+          processed.add(id);
+          // Use results length as index to maintain order consistency
+          const index = results.length;
+          results.push({ 
+            imdbId: id, 
+            title, 
+            year, 
+            type: typeHint === 'tv' ? 'tv' : 'movie', 
+            poster, 
+            imdbRating,
+            numRatings,
+            runtime,
+            popularity,
+            userRating,
+            addedAt: new Date(Date.now() - index * 1000).toISOString() 
+          });
+        };
+        document.querySelectorAll('.lister-item').forEach((el) => {
+          const a = el.querySelector('h3 a[href*="/title/"]') as HTMLAnchorElement | null;
+          const id = a?.href?.match(/tt\d+/)?.[0] || '';
+          const title = (a?.textContent?.trim() || '').replace(/^\d+\.\s*/, '');
+          const year = (el.querySelector('.lister-item-year, .secondaryInfo')?.textContent || '').trim();
+          const img = el.querySelector('img[src]') as HTMLImageElement | null;
+          push(id, title, year, img?.src || undefined);
+        });
+        document.querySelectorAll('.ipc-poster-card').forEach((el) => {
+          const a = el.querySelector('a[href*="/title/"]') as HTMLAnchorElement | null;
+          const id = a?.href?.match(/tt\d+/)?.[0] || '';
+          const title = (el.querySelector('[data-testid="title"]')?.textContent || a?.textContent || '').trim().replace(/^\d+\.\s*/, '');
+          const img = el.querySelector('img[src]') as HTMLImageElement | null;
+          const meta = el.querySelector('[data-testid="metadata"]')?.textContent || '';
+          const year = meta.match(/(19|20)\d{2}/)?.[0];
+          push(id, title, year, img?.src || undefined);
+        });
+        return results;
+      });
+    }
 
     console.log(`[fetchWatchlist] Found ${items.length} items for ${userId}`);
     
-    // Fetch posters from TMDB for all movies (not TV shows as they have different endpoint)
+    // Enhance items with TMDB metadata (limit to first 50 items for performance)
     if (items.length > 0) {
-      console.log(`[fetchWatchlist] Fetching posters from TMDB for ${items.length} items...`);
+      const maxEnhance = 50; // Reduced from 100 due to more expensive calls
+      const itemsToEnhance = items.slice(0, maxEnhance);
+      console.log(`[fetchWatchlist] Enhancing metadata from TMDB for ${itemsToEnhance.length}/${items.length} items...`);
       
-      const movieItems = items.filter(item => item.type === 'movie');
+      // Focus on movies first, as they have better TMDB coverage
+      const movieItems = itemsToEnhance.filter(item => item.type === 'movie');
       if (movieItems.length > 0) {
         try {
-          const tmdbPosters = await getTMDBPosterBatch(
+          const tmdbMetadata = await getTMDBMetadataBatch(
             movieItems.map(item => ({ title: item.title, year: item.year }))
           );
           
-          // Update items with TMDB posters
+          // Update items with TMDB metadata
           items.forEach(item => {
             if (item.type === 'movie') {
               const key = `${item.title}_${item.year || 'unknown'}`;
-              const tmdbPoster = tmdbPosters.get(key);
-              if (tmdbPoster && !item.poster) {
-                item.poster = tmdbPoster;
-                console.log(`[fetchWatchlist] Added TMDB poster for "${item.title}"`);
+              const tmdbData = tmdbMetadata.get(key);
+              if (tmdbData) {
+                // Only update if current values are missing/zero
+                if (!item.poster && tmdbData.poster) {
+                  item.poster = tmdbData.poster;
+                }
+                if (item.imdbRating === 0 && tmdbData.imdbRating > 0) {
+                  item.imdbRating = tmdbData.imdbRating;
+                }
+                if (item.numRatings === 0 && tmdbData.numRatings > 0) {
+                  item.numRatings = tmdbData.numRatings;
+                }
+                if (item.runtime === 0 && tmdbData.runtime > 0) {
+                  item.runtime = tmdbData.runtime;
+                }
+                if (item.popularity === 0 && tmdbData.popularity > 0) {
+                  item.popularity = tmdbData.popularity;
+                }
+                console.log(`[fetchWatchlist] Enhanced "${item.title}" with TMDB data`);
               }
             }
           });
           
-          const postersFound = items.filter(item => item.poster).length;
-          console.log(`[fetchWatchlist] Total items with posters: ${postersFound}/${items.length}`);
+          const enhancedCount = items.filter(item => item.imdbRating > 0 || item.runtime > 0 || item.poster).length;
+          console.log(`[fetchWatchlist] ${enhancedCount}/${items.length} items now have enhanced metadata`);
           
         } catch (error) {
-          console.error('[fetchWatchlist] Error fetching TMDB posters:', error);
+          console.error('[fetchWatchlist] Error fetching TMDB metadata:', error);
         }
       }
     }
     
-    watchlistCache.set(userId, { data: items, timestamp: Date.now() });
+    // Only cache if result looks sane (avoid caching partial loads)
+    if (items.length >= 3) {
+      watchlistCache.set(userId, { data: items, timestamp: Date.now() });
+    }
     return items;
+  })();
+
+  inFlight.set(userId, task);
+
+  try {
+    return await task;
   } catch (error) {
     console.error(`[fetchWatchlist] Error fetching watchlist for ${userId}:`, error);
     if (cached) {
@@ -241,9 +395,9 @@ export async function fetchWatchlist(userId: string): Promise<WatchlistItem[]> {
     }
     return [];
   } finally {
+    inFlight.delete(userId);
     if (browser) {
       await browser.close();
     }
   }
 }
-

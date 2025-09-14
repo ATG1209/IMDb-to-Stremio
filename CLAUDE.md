@@ -38,3 +38,17 @@ The codebase is organized into functional modules:
 ## Development Notes
 
 The project is currently in early development (M0 milestone). Core CSV parsing is implemented but most service integrations are placeholder implementations.
+
+## Version Management
+
+**CRITICAL**: Every time you make ANY change to the codebase, you MUST increment the version number:
+- Update `ADDON_VERSION` in `lib/version.ts` 
+- This ensures both the plugin/addon and web app versions stay synchronized
+- The centralized version system automatically updates all manifest endpoints and UI displays
+
+## Claude Code Workflow
+
+**ALWAYS provide manifest URLs after making changes:**
+- User's manifest: `http://localhost:3002/api/stremio/ur31595220/manifest.json?v={VERSION}`
+- Generic manifest: `http://localhost:3002/api/stremio/manifest.json?v={VERSION}`
+- This allows immediate testing of updates in Stremio

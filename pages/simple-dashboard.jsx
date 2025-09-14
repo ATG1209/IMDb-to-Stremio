@@ -292,7 +292,7 @@ export default function SimpleDashboard() {
       <footer className="py-4 mt-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Version 1.2.0 - IMDb Watchlist + Sorting ✨
+            Version {ADDON_VERSION} - Sort dropdown & newest-first ordering ✨
           </p>
         </div>
       </footer>

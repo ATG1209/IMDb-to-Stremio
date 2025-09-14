@@ -40,26 +40,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         type: 'movie',
         name: 'Mi Watchlist - Películas',
         extra: [
-          {
-            name: 'skip',
-            isRequired: false
-          },
-          {
-            name: 'sort',
-            isRequired: false,
-            options: [
-              'list_order',
-              'alphabetical', 
-              'imdb_rating',
-              'popularity',
-              'num_ratings',
-              'release_date',
-              'runtime',
-              'date_added',
-              'your_rating'
-            ],
-            optionsLimit: 1
-          }
+          { name: 'skip', isRequired: false }
         ]
       },
       {
@@ -67,26 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         type: 'series',
         name: 'Mi Watchlist - Series',
         extra: [
-          {
-            name: 'skip',
-            isRequired: false
-          },
-          {
-            name: 'sort',
-            isRequired: false,
-            options: [
-              'list_order',
-              'alphabetical',
-              'imdb_rating', 
-              'popularity',
-              'num_ratings',
-              'release_date',
-              'runtime',
-              'date_added',
-              'your_rating'
-            ],
-            optionsLimit: 1
-          }
+          { name: 'skip', isRequired: false }
         ]
       }
     ],

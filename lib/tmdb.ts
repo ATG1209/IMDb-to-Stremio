@@ -4,6 +4,10 @@ interface TMDBMovieResult {
   poster_path: string | null;
   release_date: string;
   overview: string;
+  vote_average: number;
+  vote_count: number;
+  popularity: number;
+  runtime?: number;
 }
 
 interface TMDBSearchResponse {
@@ -74,12 +78,88 @@ export async function getTMDBPoster(title: string, year?: string): Promise<strin
   }
 }
 
+export async function getTMDBMetadata(title: string, year?: string): Promise<{
+  poster: string | null;
+  imdbRating: number;
+  numRatings: number;
+  runtime: number;
+  popularity: number;
+} | null> {
+  if (!TMDB_API_KEY || TMDB_API_KEY === 'your_tmdb_api_key_here') {
+    return null;
+  }
+
+  const cacheKey = `${title}_${year || 'unknown'}`;
+  const cached = tmdbCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    // Return enhanced metadata if available
+    return {
+      poster: cached.poster,
+      imdbRating: (cached as any).imdbRating || 0,
+      numRatings: (cached as any).numRatings || 0,
+      runtime: (cached as any).runtime || 0,
+      popularity: (cached as any).popularity || 0,
+    };
+  }
+
+  try {
+    let query = encodeURIComponent(title);
+    let url = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${query}`;
+    
+    if (year) {
+      url += `&year=${year}`;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status}`);
+    }
+
+    const data: TMDBSearchResponse = await response.json();
+    
+    if (data.results && data.results.length > 0) {
+      const movie = data.results[0];
+      
+      // Get detailed info including runtime
+      const detailUrl = `${TMDB_BASE_URL}/movie/${movie.id}?api_key=${TMDB_API_KEY}`;
+      const detailResponse = await fetch(detailUrl);
+      const detailData = detailResponse.ok ? await detailResponse.json() : null;
+      
+      const result = {
+        poster: movie.poster_path ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}` : null,
+        imdbRating: movie.vote_average || 0,
+        numRatings: movie.vote_count || 0,
+        runtime: detailData?.runtime || 0,
+        popularity: movie.popularity || 0,
+      };
+      
+      // Enhanced cache with metadata
+      tmdbCache.set(cacheKey, { 
+        poster: result.poster, 
+        timestamp: Date.now(),
+        ...result
+      });
+      
+      return result;
+    }
+    
+    // Cache null result
+    tmdbCache.set(cacheKey, { poster: null, timestamp: Date.now() });
+    return null;
+    
+  } catch (error) {
+    console.error(`[TMDB] Error fetching metadata for "${title}":`, error);
+    return null;
+  }
+}
+
 export async function getTMDBPosterBatch(items: Array<{ title: string; year?: string }>): Promise<Map<string, string | null>> {
   const results = new Map<string, string | null>();
   
   // Process items in batches to avoid overwhelming the API
-  const batchSize = 5;
-  const delay = 200; // 200ms delay between requests
+  const batchSize = 20; // Increased from 5 to 20
+  const delay = 50; // Reduced from 200ms to 50ms
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -94,6 +174,42 @@ export async function getTMDBPosterBatch(items: Array<{ title: string; year?: st
     
     batchResults.forEach(({ key, poster }) => {
       results.set(key, poster);
+    });
+    
+    // Add delay between batches
+    if (i + batchSize < items.length) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  return results;
+}
+
+export async function getTMDBMetadataBatch(items: Array<{ title: string; year?: string }>): Promise<Map<string, {
+  poster: string | null;
+  imdbRating: number;
+  numRatings: number;
+  runtime: number;
+  popularity: number;
+} | null>> {
+  const results = new Map();
+  
+  const batchSize = 15; // Slightly smaller batch for detailed requests
+  const delay = 100; // Slightly longer delay for detailed requests
+  
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    
+    const promises = batch.map(async (item) => {
+      const metadata = await getTMDBMetadata(item.title, item.year);
+      const key = `${item.title}_${item.year || 'unknown'}`;
+      return { key, metadata };
+    });
+    
+    const batchResults = await Promise.all(promises);
+    
+    batchResults.forEach(({ key, metadata }) => {
+      results.set(key, metadata);
     });
     
     // Add delay between batches

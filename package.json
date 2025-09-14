@@ -1,6 +1,6 @@
 {
   "name": "imdb-to-stremio",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "description": "CLI tool to migrate IMDb data to Stremio via Trakt",
   "main": "dist/cli.js",
   "scripts": {
