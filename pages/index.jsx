@@ -184,7 +184,7 @@ export default function Home() {
       <footer className="relative z-10 py-4 mt-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Version 1.3 - IMDb Watchlist Fixed ✨
+            Version 1.2.0 - IMDb Watchlist + Sorting ✨
           </p>
         </div>
       </footer>

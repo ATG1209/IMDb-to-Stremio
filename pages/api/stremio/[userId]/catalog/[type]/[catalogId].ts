@@ -6,7 +6,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId, type, catalogId } = req.query;
+  const { userId, type, catalogId, sort } = req.query;
 
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({ error: 'Missing userId parameter' });
@@ -32,8 +32,69 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return true;
     });
 
+    // Sort the filtered items based on sort parameter
+    let sortedItems = [...filteredItems];
+    const sortBy = sort as string || 'list_order';
+
+    switch (sortBy) {
+      case 'alphabetical':
+        sortedItems.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'release_date':
+        sortedItems.sort((a, b) => {
+          const yearA = parseInt(a.year || '0');
+          const yearB = parseInt(b.year || '0');
+          return yearB - yearA; // Newest first
+        });
+        break;
+      case 'date_added':
+        sortedItems.sort((a, b) => {
+          return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime(); // Most recent first
+        });
+        break;
+      case 'imdb_rating':
+        sortedItems.sort((a, b) => {
+          const ratingA = a.imdbRating || 0;
+          const ratingB = b.imdbRating || 0;
+          return ratingB - ratingA; // Highest rating first
+        });
+        break;
+      case 'popularity':
+        sortedItems.sort((a, b) => {
+          const popA = a.popularity || 0;
+          const popB = b.popularity || 0;
+          return popB - popA; // Most popular first
+        });
+        break;
+      case 'num_ratings':
+        sortedItems.sort((a, b) => {
+          const numA = a.numRatings || 0;
+          const numB = b.numRatings || 0;
+          return numB - numA; // Most rated first
+        });
+        break;
+      case 'runtime':
+        sortedItems.sort((a, b) => {
+          const runtimeA = a.runtime || 0;
+          const runtimeB = b.runtime || 0;
+          return runtimeB - runtimeA; // Longest first
+        });
+        break;
+      case 'your_rating':
+        sortedItems.sort((a, b) => {
+          const userRatingA = a.userRating || 0;
+          const userRatingB = b.userRating || 0;
+          return userRatingB - userRatingA; // Highest user rating first
+        });
+        break;
+      case 'list_order':
+      default:
+        // Maintain original order from IMDb watchlist
+        break;
+    }
+
     // Convert to Stremio catalog format
-    const metas = filteredItems.map(item => {
+    const metas = sortedItems.map(item => {
       const meta: any = {
         id: item.imdbId,
         type: item.type === 'tv' ? 'series' : 'movie',

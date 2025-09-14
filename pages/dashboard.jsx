@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import ThemeToggle from '../components/ThemeToggle';
+import { ADDON_VERSION } from '../lib/version';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -137,7 +138,7 @@ export default function Dashboard() {
   };
 
   const filteredItems = getFilteredAndSortedWatchlist();
-  const addonUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/stremio/manifest.json` : '';
+  const addonUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/stremio/manifest.json?v=${ADDON_VERSION}` : '';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-teal-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900">

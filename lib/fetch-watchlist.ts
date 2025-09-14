@@ -10,6 +10,11 @@ export interface WatchlistItem {
   plot?: string;
   genres?: string[];
   rating?: string;
+  imdbRating?: number;
+  numRatings?: number;
+  runtime?: number;
+  popularity?: number;
+  userRating?: number;
   addedAt: string;
 }
 

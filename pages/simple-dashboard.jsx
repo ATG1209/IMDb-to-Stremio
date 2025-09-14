@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { ADDON_VERSION } from '../lib/version';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function SimpleDashboard() {
@@ -65,7 +66,7 @@ export default function SimpleDashboard() {
   };
 
   const addonUrl = addonGenerated && imdbUserId ? 
-    `${typeof window !== 'undefined' ? window.location.origin : ''}/api/stremio/${imdbUserId}/manifest.json` : '';
+    `${typeof window !== 'undefined' ? window.location.origin : ''}/api/stremio/${imdbUserId}/manifest.json?v=${ADDON_VERSION}` : '';
 
   const copyToClipboard = async (text) => {
     try {
@@ -291,7 +292,7 @@ export default function SimpleDashboard() {
       <footer className="py-4 mt-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Version 1.3 - IMDb Watchlist Fixed ✨
+            Version 1.2.0 - IMDb Watchlist + Sorting ✨
           </p>
         </div>
       </footer>
