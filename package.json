@@ -5,6 +5,7 @@
   "main": "dist/cli.js",
   "scripts": {
     "build": "next build",
+    "postbuild": "npx playwright install chromium --with-deps",
     "dev": "next dev",
     "start": "next start",
     "build-cli": "tsc",
