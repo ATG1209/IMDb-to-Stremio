@@ -1,5 +1,5 @@
 import { getTMDBPosterBatch, getTMDBMetadataBatch, detectContentTypeBatch } from './tmdb';
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 
 export interface WatchlistItem {
   imdbId: string;
@@ -43,7 +43,7 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
   const task = (async () => {
     console.log(`[fetchWatchlist] Starting MULTI-URL strategy for user ${userId} to overcome 250-item limit`);
 
-    browser = await chromium.launch({
+    browser = await puppeteer.launch({
       headless: true,
       args: [
         '--no-sandbox',
@@ -51,14 +51,13 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--disable-gpu',
-        '--window-size=1920x1080'
+        '--window-size=1920,1080'
       ]
     });
 
-    const page = await browser.newPage({
-      viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
     // Set additional headers to avoid detection
     await page.setExtraHTTPHeaders({
@@ -298,8 +297,7 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
       try {
         console.log(`[fetchWatchlist] Processing ${config.name} (${config.url})`);
 
-        await page.goto(config.url, { timeout: 45000 });
-        await page.waitForLoadState('networkidle');
+        await page.goto(config.url, { timeout: 45000, waitUntil: 'networkidle2' });
         await page.waitForTimeout(1500);
 
         const pageOffset = config.name === 'page-1' ? 0 : 250; // Page 1 = newest, Page 2 = older
