@@ -18,20 +18,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('Starting manual watchlist sync...');
 
       const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+
+      // Capture console logs during execution
+      const originalConsoleError = console.error;
+      const originalConsoleLog = console.log;
+      const capturedLogs: string[] = [];
+      const capturedInfo: string[] = [];
+
+      console.error = (...args) => {
+        capturedLogs.push('[ERROR] ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+        originalConsoleError(...args);
+      };
+
+      console.log = (...args) => {
+        capturedInfo.push('[INFO] ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+        originalConsoleLog(...args);
+      };
+
       const items = await fetchWatchlist(userId, { forceRefresh: true });
+
+      // Restore console
+      console.error = originalConsoleError;
+      console.log = originalConsoleLog;
 
       return res.status(200).json({
         success: true,
         message: 'Watchlist synced successfully',
         totalItems: items.length,
         lastUpdated: new Date().toISOString(),
+        debug: {
+          errors: capturedLogs,
+          info: capturedInfo,
+          userId: userId,
+          timestamp: new Date().toISOString()
+        },
         data: items.slice(0, 5) // Return first 5 items as preview
       });
     } catch (error) {
       console.error('Sync failed:', error);
       return res.status(500).json({
         error: 'Sync failed',
-        message: error instanceof Error ? error.message : 'Unknown error'
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
       });
     } finally {
       syncInProgress = false;
