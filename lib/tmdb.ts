@@ -158,8 +158,8 @@ export async function getTMDBPosterBatch(items: Array<{ title: string; year?: st
   const results = new Map<string, string | null>();
   
   // Process items in batches to avoid overwhelming the API
-  const batchSize = 20; // Increased from 5 to 20
-  const delay = 50; // Reduced from 200ms to 50ms
+  const batchSize = 25; // Further increased for poster requests
+  const delay = 30; // Faster delay for poster-only requests
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -194,8 +194,8 @@ export async function getTMDBMetadataBatch(items: Array<{ title: string; year?: 
 } | null>> {
   const results = new Map();
   
-  const batchSize = 15; // Slightly smaller batch for detailed requests
-  const delay = 100; // Slightly longer delay for detailed requests
+  const batchSize = 30; // Increased batch size for better performance
+  const delay = 25; // Reduced delay for faster processing
   
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);

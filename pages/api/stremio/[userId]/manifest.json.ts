@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { ADDON_VERSION } from '../../../../lib/version';
+// Force recompilation
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -21,39 +22,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const manifest = {
-    id: `com.imdb.watchlist.sorted.${userId}`,
+    id: `com.imdb.watchlist.${userId}`,
     version: ADDON_VERSION,
-    name: `IMDb Watchlist SORTED (${userId})`,
-    description: `Tu watchlist personal de IMDb sincronizada automáticamente`,
+    name: `IMDb Watchlist (${userId})`,
+    description: `Your IMDb Watchlist for user ${userId}. Newest additions first by default.`,
     logo: 'https://m.media-amazon.com/images/G/01/IMDb/BG_rectangle._CB1509060989_SY230_SX307_AL_.png',
     background: 'https://dl.strem.io/addon-background.jpg',
-    
+
     // Addon capabilities
     resources: ['catalog'],
     types: ['movie', 'series'],
     idPrefixes: ['tt'],
-    
-    // Catalog configuration
+
+    // Simple catalog - no sorting options, fixed newest-first order
     catalogs: [
       {
-        id: `imdb-watchlist-${userId}`,
-        type: 'movie',
-        name: 'Mi Watchlist - Películas',
-        extra: [
-          { name: 'skip', isRequired: false }
-        ]
+        id: `imdb-movies-${userId}`,
+        name: 'IMDb Movies (Newest First)',
+        type: 'movie'
       },
       {
-        id: `imdb-watchlist-${userId}`,
-        type: 'series',
-        name: 'Mi Watchlist - Series',
-        extra: [
-          { name: 'skip', isRequired: false }
-        ]
+        id: `imdb-series-${userId}`,
+        name: 'IMDb Series (Newest First)',
+        type: 'series'
       }
     ],
-    
-    // Addon metadata
+
+    // Simple behavior - no configuration needed
     behaviorHints: {
       configurable: false,
       configurationRequired: false

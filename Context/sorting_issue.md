@@ -412,3 +412,86 @@ All 9 sorting options should now work:
 - All manifest endpoints - Automatically use new version number
 
 This comprehensive solution addresses the root cause of missing metadata while providing robust fallback mechanisms and performance optimizations. The implementation follows established patterns in the codebase and maintains backward compatibility while significantly improving functionality.
+
+## MAJOR BREAKTHROUGH: Sorting Order Issue (v1.8.0-1.8.1)
+
+### The Discovery
+After implementing comprehensive metadata extraction and sorting logic, a critical issue remained: **newest items were appearing at the bottom instead of the top**. Investigation revealed that while our sorting logic was correct, the fundamental **order of scraped data was backwards**.
+
+### Root Cause: Stremlist.com Comparison
+Analysis of the working Stremlist.com implementation revealed:
+
+**Stremlist.com results (correct):**
+```
+1. Gran Turismo (newest addition)
+2. The Men Who Stare at Goats
+3. Hypnotic
+```
+
+**Our results (incorrect):**
+```
+1. Traffic (oldest addition)
+2. The Pianist
+3. Black Book
+```
+
+**The smoking gun:** Gran Turismo appeared at position **249** in our list (nearly last) while it was position **0** in Stremlist (first).
+
+### Technical Analysis
+The issue was in the IMDb scraping approach:
+
+1. **IMDb URL used**: `https://www.imdb.com/user/ur31595220/watchlist?sort=created:desc&view=detail` ✅
+2. **Expected behavior**: Should return newest additions first
+3. **Actual behavior**: Returned oldest additions first
+4. **Cause**: IMDb's `created:desc` parameter behavior vs. actual DOM rendering order
+
+### The Simple Solution (v1.8.1)
+After trying complex date parsing and metadata sorting, the breakthrough came with a **trivial fix**:
+
+```typescript
+// BEFORE: Complex sorting logic with date comparisons
+sortedItems.sort((a, b) => {
+  const dateA = a.addedAt ? new Date(a.addedAt).getTime() : 0;
+  const dateB = b.addedAt ? new Date(b.addedAt).getTime() : 0;
+  return dateB - dateA; // Newest first
+});
+
+// AFTER: Simple array reverse
+const sortedItems = [...filteredItems].reverse();
+```
+
+**Result**: Gran Turismo immediately moved from position 249 to position 0, **perfectly matching Stremlist**.
+
+### Implementation Simplification (v1.8.1)
+Based on this discovery, the entire sorting system was simplified:
+
+1. **Removed all sorting options** - Just fixed newest-first order
+2. **Updated manifest** - No configuration UI, simple catalog names
+3. **Streamlined catalog endpoint** - Single `.reverse()` operation
+4. **Eliminated complexity** - No more complex date parsing or metadata sorting
+
+**Files Modified:**
+- `pages/api/stremio/[userId]/manifest.json.ts` - Simplified catalog structure
+- `pages/api/stremio/[userId]/catalog/[type]/[catalogId].ts` - Simple reverse operation
+- `lib/version.ts` - Incremented to 1.8.1
+
+### Key Learnings
+1. **Simple solutions often work best** - Complex metadata sorting wasn't needed
+2. **Working examples are invaluable** - Stremlist provided the correct reference
+3. **Order of operations matters** - The scraping order, not sorting logic, was the issue
+4. **Test with real data** - Position comparisons revealed the backwards behavior
+
+### Performance Benefits
+The simplification also improved performance:
+- **Eliminated** complex date parsing logic
+- **Removed** metadata-based sorting overhead
+- **Reduced** from ~50 seconds load time to faster response
+- **Simplified** debugging and maintenance
+
+### Current Status (v1.8.1)
+- ✅ **Sorting order fixed** - Gran Turismo appears first (newest additions)
+- ✅ **Matches Stremlist behavior** exactly
+- ✅ **Simplified implementation** - No configuration complexity
+- ⚠️ **Remaining issues**: Poster loading, slow response times, pagination limits
+
+This breakthrough demonstrates that sometimes the most complex problems have surprisingly simple solutions. The key was having the right reference point (Stremlist) to identify that our fundamental approach was backwards.
