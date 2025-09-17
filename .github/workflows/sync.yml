@@ -1,0 +1,77 @@
+name: Sync IMDb Watchlist
+
+on:
+  schedule:
+    # Runs every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL || 'https://imdb-stremio.vercel.app' }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    name: Sync Watchlist Data
+
+    steps:
+      - name: Trigger Sync
+        run: |
+          echo "🔄 Triggering watchlist sync..."
+          echo "📅 Scheduled time: $(date)"
+          echo "🌐 Target URL: $VERCEL_APP_URL/api/cron/sync-watchlist"
+
+          response=$(curl -s -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{"trigger": "github_actions", "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' \
+            "$VERCEL_APP_URL/api/cron/sync-watchlist")
+
+          http_code="${response: -3}"
+          response_body="${response%???}"
+
+          echo "📊 HTTP Status: $http_code"
+          echo "📝 Response: $response_body"
+
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Sync completed successfully!"
+          elif [ "$http_code" -eq 401 ]; then
+            echo "❌ Authentication failed. Check CRON_SECRET."
+            exit 1
+          else
+            echo "⚠️ Sync failed with HTTP $http_code"
+            echo "$response_body"
+            exit 1
+          fi
+
+      - name: Verify Sync Results
+        if: success()
+        run: |
+          echo "🔍 Verifying sync results..."
+
+          # Test manifest endpoint
+          manifest_response=$(curl -s -w "%{http_code}" \
+            "$VERCEL_APP_URL/api/stremio/ur31595220/manifest.json")
+
+          manifest_code="${manifest_response: -3}"
+
+          if [ "$manifest_code" -eq 200 ]; then
+            echo "✅ Manifest endpoint is healthy"
+          else
+            echo "⚠️ Manifest endpoint returned HTTP $manifest_code"
+          fi
+
+          # Test catalog endpoint
+          catalog_response=$(curl -s -w "%{http_code}" \
+            "$VERCEL_APP_URL/api/stremio/ur31595220/catalog/movie/imdb-watchlist")
+
+          catalog_code="${catalog_response: -3}"
+
+          if [ "$catalog_code" -eq 200 ]; then
+            echo "✅ Movie catalog endpoint is healthy"
+          else
+            echo "⚠️ Movie catalog endpoint returned HTTP $catalog_code"
+          fi
+
+          echo "🎉 Sync verification completed!"

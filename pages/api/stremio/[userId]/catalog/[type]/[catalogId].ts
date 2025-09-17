@@ -23,8 +23,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Content-Type', 'application/json');
 
   try {
+    // Production logging
+    const startTime = Date.now();
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (isProduction) {
+      console.log(`[Catalog API] Request: ${type}/${catalogId} for user ${userId}`);
+    }
+
     const force = (Array.isArray(nocache) ? nocache[0] : nocache) === '1' ||
                   (Array.isArray(refresh) ? refresh[0] : refresh) === '1';
+
     const watchlistItems = await fetchWatchlist(userId, { forceRefresh: force });
     
     // Filter by content type (items are already in newest-first order from fetch)
@@ -53,11 +62,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Set cache headers (allow Stremio to cache briefly)
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60');
 
+    // Production performance logging
+    if (isProduction) {
+      const duration = Date.now() - startTime;
+      console.log(`[Catalog API] Served ${metas.length} ${type}s in ${duration}ms`);
+    }
+
     return res.status(200).json({ metas, cacheMaxAge: 60 });
 
   } catch (error) {
-    console.error('Error serving catalog:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    // Enhanced error logging for production
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`[Catalog API] Error for ${userId}/${type}/${catalogId}:`, errorMessage);
+    } else {
+      console.error('Error serving catalog:', error);
+    }
+
     // Return 200 with empty metas to avoid Stremio "Failed to fetch"
-    return res.status(200).json({ metas: [], cacheMaxAge: 30 });
+    return res.status(200).json({
+      metas: [],
+      cacheMaxAge: 30,
+      error: process.env.NODE_ENV === 'production' ? 'Service temporarily unavailable' : errorMessage
+    });
   }
 }

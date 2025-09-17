@@ -57,8 +57,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const syncState = await loadSyncState();
     const now = new Date();
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (isProduction) {
+      console.log(`[Cron] Sync request received at ${now.toISOString()}`);
+    }
+
+    const syncState = await loadSyncState();
     const lastSyncTime = new Date(syncState.lastSyncTime);
     const timeSinceLastSync = now.getTime() - lastSyncTime.getTime();
 
@@ -87,14 +93,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       await saveSyncState(newState);
       
-      console.log(`Scheduled sync completed successfully: ${result.totalItems} items`);
-      
+      const syncDuration = Date.now() - now.getTime();
+
+      if (isProduction) {
+        console.log(`[Cron] Sync #${newState.syncCount} completed: ${result.totalItems} items in ${syncDuration}ms`);
+      } else {
+        console.log(`Scheduled sync completed successfully: ${result.totalItems} items`);
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Watchlist synced successfully',
         syncCount: newState.syncCount,
         itemCount: result.totalItems,
-        lastUpdated: result.lastUpdated
+        lastUpdated: result.lastUpdated,
+        duration: syncDuration
       });
       
     } catch (syncError) {

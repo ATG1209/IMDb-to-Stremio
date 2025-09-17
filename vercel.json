@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "functions": {
+    "pages/api/**/*.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/cron/*.ts": {
+      "maxDuration": 300
+    },
+    "pages/api/stremio/**/*.ts": {
+      "maxDuration": 300
+    }
+  },
+  "env": {
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"
+  },
+  "regions": ["iad1"],
+  "rewrites": [
+    {
+      "source": "/api/stremio/:userId/manifest.json",
+      "destination": "/api/stremio/:userId/manifest"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/stremio/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300, s-maxage=300"
+        }
+      ]
+    }
+  ]
+}

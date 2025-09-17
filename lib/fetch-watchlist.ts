@@ -1,4 +1,4 @@
-import { getTMDBPosterBatch, getTMDBMetadataBatch } from './tmdb';
+import { getTMDBPosterBatch, getTMDBMetadataBatch, detectContentTypeBatch } from './tmdb';
 import { chromium } from 'playwright';
 
 export interface WatchlistItem {
@@ -153,6 +153,11 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
           const text = (el.textContent || '').toLowerCase();
           const type = text.includes('tv series') || text.includes('mini series') || text.includes('series') ? 'tv' : 'movie';
 
+          // Debug TV series detection
+          if (type === 'tv') {
+            console.log(`[TV Debug] Found TV series: "${title}" (${id}) - detected from text: "${text.substring(0, 200)}"`);
+          }
+
           const ratingEl = el.querySelector('.ratings-bar .inline-block strong');
           const imdbRating = ratingEl ? parseFloat((ratingEl.textContent || '').trim() || '0') || 0 : 0;
 
@@ -186,6 +191,11 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
           const img = el.querySelector('img[src]');
           const tagText = (el.textContent || '').toLowerCase();
           const type = tagText.includes('series') ? 'tv' : 'movie';
+
+          // Debug TV series detection
+          if (type === 'tv') {
+            console.log(`[TV Debug Method 2] Found TV series: "${title}" (${id}) - detected from text: "${tagText.substring(0, 200)}"`);
+          }
 
           return id && title ? {
             imdbId: id,
@@ -228,6 +238,11 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
 
           const contextText = parent ? (parent.textContent || '').toLowerCase() : '';
           const type = contextText.includes('series') || contextText.includes('tv') ? 'tv' : 'movie';
+
+          // Debug TV series detection
+          if (type === 'tv') {
+            console.log(`[TV Debug Method 3] Found TV series: "${title}" (${id}) - detected from text: "${contextText.substring(0, 200)}"`);
+          }
 
           return {
             imdbId: id,
@@ -308,55 +323,67 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
     // Prioritize items based on sort order (newest first priority)
     console.log(`[fetchWatchlist] MULTI-URL COMPLETE: Found ${allItems.length} total unique items`);
 
+    // Debug content type distribution
+    const movieCount = allItems.filter(item => item.type === 'movie').length;
+    const tvCount = allItems.filter(item => item.type === 'tv').length;
+    console.log(`[fetchWatchlist] Content breakdown: ${movieCount} movies, ${tvCount} TV series`);
+
     // Reverse array since created:asc gives oldest first, but we want newest first
     allItems.reverse();
 
     console.log(`[fetchWatchlist] Sorted array - first 3: ${allItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
-    // Enhance items with TMDB metadata
+    // First, detect correct content types using TMDB
     if (allItems.length > 0) {
-      const maxEnhance = 150; // Increased from 60 to cover more items with posters
-      const itemsToEnhance = allItems.slice(0, maxEnhance);
-      console.log(`[fetchWatchlist] Enhancing metadata from TMDB for ${itemsToEnhance.length}/${allItems.length} items...`);
+      console.log(`[fetchWatchlist] Detecting content types for ${allItems.length} items using TMDB...`);
+      try {
+        const contentTypes = await detectContentTypeBatch(
+          allItems.map(item => ({ title: item.title, year: item.year }))
+        );
 
-      const movieItems = itemsToEnhance.filter(item => item.type === 'movie');
-      if (movieItems.length > 0) {
-        try {
-          const tmdbMetadata = await getTMDBMetadataBatch(
-            movieItems.map(item => ({ title: item.title, year: item.year }))
-          );
+        // Update content types based on TMDB detection
+        allItems.forEach(item => {
+          const key = `${item.title}_${item.year || 'unknown'}`;
+          const detectedType = contentTypes.get(key);
+          if (detectedType) {
+            item.type = detectedType;
+          }
+        });
 
-          allItems.forEach(item => {
-            if (item.type === 'movie') {
-              const key = `${item.title}_${item.year || 'unknown'}`;
-              const tmdbData = tmdbMetadata.get(key);
-              if (tmdbData) {
-                if (tmdbData.poster) {
-                  item.poster = tmdbData.poster;
-                }
-                if (item.imdbRating === 0 && tmdbData.imdbRating > 0) {
-                  item.imdbRating = tmdbData.imdbRating;
-                }
-                if (item.numRatings === 0 && tmdbData.numRatings > 0) {
-                  item.numRatings = tmdbData.numRatings;
-                }
-                if (item.runtime === 0 && tmdbData.runtime > 0) {
-                  item.runtime = tmdbData.runtime;
-                }
-                if (item.popularity === 0 && tmdbData.popularity > 0) {
-                  item.popularity = tmdbData.popularity;
-                }
-                console.log(`[fetchWatchlist] Enhanced "${item.title}" with TMDB data`);
-              }
-            }
-          });
+        const finalMovieCount = allItems.filter(item => item.type === 'movie').length;
+        const finalTvCount = allItems.filter(item => item.type === 'tv').length;
+        console.log(`[fetchWatchlist] Updated content breakdown: ${finalMovieCount} movies, ${finalTvCount} TV series`);
 
-          const enhancedCount = allItems.filter(item => item.imdbRating > 0 || item.runtime > 0 || item.poster).length;
-          console.log(`[fetchWatchlist] ${enhancedCount}/${allItems.length} items now have enhanced metadata`);
+      } catch (error) {
+        console.error('[fetchWatchlist] Error detecting content types:', error);
+      }
+    }
 
-        } catch (error) {
-          console.error('[fetchWatchlist] Error fetching TMDB metadata:', error);
-        }
+    // Enhance items with TMDB posters (optimized for speed and coverage)
+    if (allItems.length > 0) {
+      console.log(`[fetchWatchlist] Fetching TMDB posters for all ${allItems.length} items...`);
+      try {
+        // Use poster-only batch for speed - covers ALL items (movies and TV series)
+        const tmdbPosters = await getTMDBPosterBatch(
+          allItems.map(item => ({ title: item.title, year: item.year }))
+        );
+
+        // Apply posters to all items
+        allItems.forEach(item => {
+          const key = `${item.title}_${item.year || 'unknown'}`;
+          const poster = tmdbPosters.get(key);
+          if (poster) {
+            item.poster = poster;
+          }
+        });
+
+        const posterCount = allItems.filter(item => item.poster).length;
+        const movieCount = allItems.filter(item => item.type === 'movie').length;
+        const tvCount = allItems.filter(item => item.type === 'tv').length;
+        console.log(`[fetchWatchlist] ${posterCount}/${allItems.length} items now have TMDB posters (${movieCount} movies, ${tvCount} TV series)`);
+
+      } catch (error) {
+        console.error('[fetchWatchlist] Error fetching TMDB posters:', error);
       }
     }
 
