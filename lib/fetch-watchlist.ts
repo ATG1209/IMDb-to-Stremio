@@ -1,6 +1,8 @@
 import { getTMDBPosterBatch, getTMDBMetadataBatch, detectContentTypeBatch } from './tmdb';
 import puppeteer from 'puppeteer';
 
+// Force rebuild - using Puppeteer instead of Playwright for serverless compatibility
+
 export interface WatchlistItem {
   imdbId: string;
   title: string;
