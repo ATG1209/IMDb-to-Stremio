@@ -26,7 +26,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const capturedInfo: string[] = [];
 
       console.error = (...args) => {
-        capturedLogs.push('[ERROR] ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+        capturedLogs.push('[ERROR] ' + args.map(a => {
+          if (typeof a === 'string') return a;
+          if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack}`;
+          return JSON.stringify(a, null, 2);
+        }).join(' '));
         originalConsoleError(...args);
       };
 
