@@ -38,7 +38,8 @@
       "WebFetch(domain:github.com)",
       "mcp__firecrawl__firecrawl_scrape",
       "Read(//dev/**)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
