@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { IMDbSyncService } from '../../../lib/imdb-sync';
+import { fetchWatchlist } from '../../../lib/fetch-watchlist';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -78,11 +78,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log(`Starting scheduled sync (sync #${syncState.syncCount + 1})`);
-    
-    const syncService = new IMDbSyncService();
-    
+
+    const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+
     try {
-      const result = await syncService.syncWatchlist();
+      const items = await fetchWatchlist(userId, { forceRefresh: true });
+      const result = {
+        totalItems: items.length,
+        lastUpdated: new Date().toISOString(),
+        items: items.slice(0, 5) // Sample of first 5 items
+      };
       
       // Update sync state
       const newState: SyncState = {
@@ -119,10 +124,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
       
       await saveSyncState(newState);
-      
+
       throw syncError;
-    } finally {
-      await syncService.cleanup();
     }
     
   } catch (error) {
