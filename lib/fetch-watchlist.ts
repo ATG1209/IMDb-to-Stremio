@@ -57,23 +57,33 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
 
     const page = await browser.newPage({
       viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+
+    // Set additional headers to avoid detection
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate',
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
     });
 
     // Set longer timeouts for pagination strategy
     page.setDefaultTimeout(60000);
     page.setDefaultNavigationTimeout(60000);
 
-    // PAGINATION STRATEGY: Successfully extracts 410/501 items using page parameter
+    // PAGINATION STRATEGY: Match exact URL format from user's browser
     const urlConfigs = [
       {
         name: 'page-1',
-        url: `https://www.imdb.com/user/${userId}/watchlist?sort=created:asc&view=grid`,
+        url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all`,
         priority: 1
       },
       {
         name: 'page-2',
-        url: `https://www.imdb.com/user/${userId}/watchlist?sort=created:asc&view=grid&page=2`,
+        url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all&page=2`,
         priority: 2
       }
     ];
