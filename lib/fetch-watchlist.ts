@@ -1,7 +1,8 @@
 import { getTMDBPosterBatch, getTMDBMetadataBatch, detectContentTypeBatch } from './tmdb';
 import puppeteer from 'puppeteer';
+import chromium from 'chrome-aws-lambda';
 
-// Force rebuild - using Puppeteer instead of Playwright for serverless compatibility
+// Force rebuild - using Puppeteer with chrome-aws-lambda for serverless compatibility
 
 export interface WatchlistItem {
   imdbId: string;
@@ -45,55 +46,30 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
   const task = (async () => {
     console.log(`[fetchWatchlist] Starting MULTI-URL strategy for user ${userId} to overcome 250-item limit`);
 
-    // Configure Puppeteer for serverless environments
-    const launchOptions: any = {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
-        '--window-size=1920,1080'
-      ]
-    };
+    // Configure browser for serverless environments
+    const isProduction = process.env.NODE_ENV === 'production';
 
-    // Try to find Chrome executable in serverless environment
-    if (process.env.NODE_ENV === 'production') {
-      try {
-        // Try common Chrome paths in serverless environments
-        const chromePaths = [
-          '/opt/google/chrome/chrome',
-          '/usr/bin/google-chrome-stable',
-          '/usr/bin/google-chrome',
-          '/usr/bin/chromium-browser',
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          process.env.CHROME_EXECUTABLE_PATH
-        ].filter(Boolean);
-
-        let executablePath = null;
-        for (const path of chromePaths) {
-          try {
-            // We can't use fs.existsSync in serverless, so just try each path
-            executablePath = path;
-            break;
-          } catch (e) {
-            continue;
-          }
-        }
-
-        if (executablePath) {
-          launchOptions.executablePath = executablePath;
-        }
-      } catch (e) {
-        console.log('[fetchWatchlist] Could not find Chrome executable, using default');
-      }
+    if (isProduction) {
+      // Use chrome-aws-lambda for serverless environments
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        executablePath: await chromium.executablePath,
+        headless: chromium.headless,
+      });
+    } else {
+      // Use regular Puppeteer for local development
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--disable-gpu',
+          '--window-size=1920,1080'
+        ]
+      });
     }
-
-    browser = await puppeteer.launch(launchOptions);
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });

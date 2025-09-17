@@ -5,7 +5,7 @@
   "main": "dist/cli.js",
   "scripts": {
     "build": "next build",
-    "postbuild": "npx puppeteer browsers install chrome",
+    "postbuild": "echo 'Using chrome-aws-lambda for serverless environments'",
     "dev": "next dev",
     "start": "next start",
     "build-cli": "tsc",
@@ -21,6 +21,7 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "bcrypt": "^6.0.0",
+    "chrome-aws-lambda": "^10.1.0",
     "commander": "^14.0.1",
     "express": "^5.1.0",
     "formidable": "^3.5.4",
