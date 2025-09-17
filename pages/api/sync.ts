@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { IMDbSyncService } from '../../lib/imdb-sync';
+import { fetchWatchlist } from '../../lib/fetch-watchlist';
 
 let syncInProgress = false;
 
@@ -7,24 +7,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'POST') {
     // Trigger manual sync
     if (syncInProgress) {
-      return res.status(429).json({ 
+      return res.status(429).json({
         error: 'Sync already in progress',
         message: 'Please wait for the current sync to complete'
       });
     }
 
-    const syncService = new IMDbSyncService();
-    
     try {
       syncInProgress = true;
       console.log('Starting manual watchlist sync...');
-      
-      const result = await syncService.syncWatchlist();
-      
+
+      const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+      const items = await fetchWatchlist(userId, { forceRefresh: true });
+
       return res.status(200).json({
         success: true,
         message: 'Watchlist synced successfully',
-        data: result
+        totalItems: items.length,
+        lastUpdated: new Date().toISOString(),
+        data: items.slice(0, 5) // Return first 5 items as preview
       });
     } catch (error) {
       console.error('Sync failed:', error);
@@ -34,7 +35,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     } finally {
       syncInProgress = false;
-      await syncService.cleanup();
     }
   } 
   
