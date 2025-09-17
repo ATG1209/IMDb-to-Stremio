@@ -5,7 +5,7 @@
   "main": "dist/cli.js",
   "scripts": {
     "build": "next build",
-    "postbuild": "echo 'Using Puppeteer - no browser installation needed'",
+    "postbuild": "npx puppeteer browsers install chrome",
     "dev": "next dev",
     "start": "next start",
     "build-cli": "tsc",
