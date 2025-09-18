@@ -42,7 +42,10 @@
       "Bash(git checkout:*)",
       "Bash(git merge:*)",
       "mcp__vercel__web_fetch_vercel_url",
-      "mcp__vercel__get_deployment_build_logs"
+      "mcp__vercel__get_deployment_build_logs",
+      "mcp__vercel__list_teams",
+      "mcp__vercel__list_projects",
+      "mcp__vercel__get_deployment"
     ],
     "deny": [],
     "ask": []
