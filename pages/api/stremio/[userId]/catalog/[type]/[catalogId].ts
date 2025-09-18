@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { workerClient, WorkerWatchlistItem } from '../../../../../../lib/workerClient';
-import { fetchWatchlist } from '../../../../../../lib/fetch-watchlist'; // Fallback for local development
+import { vpsWorkerClient, WorkerWatchlistItem } from '../../../../../../lib/vpsWorkerClient';
+import { fetchWatchlist } from '../../../../../../lib/fetch-watchlist'; // Fallback for development
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -37,28 +37,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let watchlistItems: WorkerWatchlistItem[] = [];
 
-    // Try worker service first, fallback to direct scraping in development
-    const useWorker = process.env.WORKER_URL && process.env.WORKER_SECRET;
+    // Try VPS worker first, fallback to direct scraping in development
+    const useWorker = process.env.WORKER_URL;
 
     if (useWorker) {
       try {
         // Check worker health first
-        const isWorkerHealthy = await workerClient.healthCheck();
+        const isWorkerHealthy = await vpsWorkerClient.isHealthy();
 
         if (isWorkerHealthy) {
-          watchlistItems = await workerClient.getWatchlist(userId, {
-            forceRefresh: force,
-            maxAgeHours: 12
+          watchlistItems = await vpsWorkerClient.scrapeWatchlist(userId, {
+            forceRefresh: force
           });
 
           if (isProduction) {
-            console.log(`[Catalog] Using worker service: ${watchlistItems.length} items`);
+            console.log(`[Catalog] Using VPS worker: ${watchlistItems.length} items`);
           }
         } else {
-          throw new Error('Worker service is not healthy');
+          throw new Error('VPS worker is not healthy');
         }
       } catch (workerError) {
-        console.warn(`[Catalog] Worker service failed for ${userId}:`, workerError);
+        console.warn(`[Catalog] VPS worker failed for ${userId}:`, workerError);
 
         // In production, return empty array rather than fallback
         if (isProduction) {
