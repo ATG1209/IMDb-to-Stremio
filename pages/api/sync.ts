@@ -1,80 +1,142 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { fetchWatchlist } from '../../lib/fetch-watchlist';
 
-let syncInProgress = false;
+// Worker service configuration
+const WORKER_URL = process.env.WORKER_URL || 'http://localhost:3000';
+const WORKER_SECRET = process.env.WORKER_SECRET;
+
+// In-memory job tracking (in production, use Redis/database)
+const activeJobs = new Map<string, { jobId: string; startedAt: string; status: string }>();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
-    // Trigger manual sync
-    if (syncInProgress) {
+    // Trigger manual sync via worker
+    const { forceRefresh = false } = req.body;
+    const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+
+    // Check if there's already an active job for this user
+    const existingJob = activeJobs.get(userId);
+    if (existingJob && existingJob.status === 'processing') {
       return res.status(429).json({
         error: 'Sync already in progress',
-        message: 'Please wait for the current sync to complete'
+        message: 'Please wait for the current sync to complete',
+        jobId: existingJob.jobId,
+        startedAt: existingJob.startedAt
       });
     }
 
     try {
-      syncInProgress = true;
-      console.log('Starting manual watchlist sync...');
+      console.log(`Starting worker-based sync for user ${userId}...`);
 
-      const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+      if (!WORKER_SECRET) {
+        throw new Error('WORKER_SECRET not configured');
+      }
 
-      // Capture console logs during execution
-      const originalConsoleError = console.error;
-      const originalConsoleLog = console.log;
-      const capturedLogs: string[] = [];
-      const capturedInfo: string[] = [];
-
-      console.error = (...args) => {
-        capturedLogs.push('[ERROR] ' + args.map(a => {
-          if (typeof a === 'string') return a;
-          if (a instanceof Error) return `${a.name}: ${a.message}\n${a.stack}`;
-          return JSON.stringify(a, null, 2);
-        }).join(' '));
-        originalConsoleError(...args);
-      };
-
-      console.log = (...args) => {
-        capturedInfo.push('[INFO] ' + args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
-        originalConsoleLog(...args);
-      };
-
-      const items = await fetchWatchlist(userId, { forceRefresh: true });
-
-      // Restore console
-      console.error = originalConsoleError;
-      console.log = originalConsoleLog;
-
-      return res.status(200).json({
-        success: true,
-        message: 'Watchlist synced successfully',
-        totalItems: items.length,
-        lastUpdated: new Date().toISOString(),
-        debug: {
-          errors: capturedLogs,
-          info: capturedInfo,
-          userId: userId,
-          timestamp: new Date().toISOString()
+      // Enqueue job with worker service
+      const workerResponse = await fetch(`${WORKER_URL}/jobs`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WORKER_SECRET}`,
+          'Content-Type': 'application/json'
         },
-        data: items.slice(0, 5) // Return first 5 items as preview
+        body: JSON.stringify({
+          imdbUserId: userId,
+          callbackUrl: `${process.env.VERCEL_URL || 'http://localhost:3000'}/api/worker-callback`,
+          forceRefresh
+        }),
+        timeout: 10000
       });
+
+      if (!workerResponse.ok) {
+        const errorText = await workerResponse.text();
+        throw new Error(`Worker service error: ${workerResponse.status} - ${errorText}`);
+      }
+
+      const workerResult = await workerResponse.json();
+
+      // Track the job
+      if (workerResult.status === 'pending') {
+        activeJobs.set(userId, {
+          jobId: workerResult.jobId,
+          startedAt: new Date().toISOString(),
+          status: 'processing'
+        });
+      }
+
+      if (workerResult.cached && workerResult.result) {
+        // Return cached result immediately
+        console.log(`Returning cached result for user ${userId}`);
+        return res.status(200).json({
+          success: true,
+          message: 'Watchlist synced successfully (cached)',
+          totalItems: workerResult.result.totalItems,
+          lastUpdated: workerResult.result.lastUpdated,
+          cached: true,
+          jobId: workerResult.jobId,
+          data: workerResult.result.items?.slice(0, 5) || []
+        });
+      }
+
+      // Return job ID for polling
+      return res.status(202).json({
+        success: true,
+        message: 'Sync job started successfully',
+        jobId: workerResult.jobId,
+        status: workerResult.status,
+        estimatedDuration: workerResult.estimatedDuration || '30-60 seconds',
+        pollUrl: `/api/sync/status/${workerResult.jobId}`
+      });
+
     } catch (error) {
-      console.error('Sync failed:', error);
+      console.error('Worker sync failed:', error);
       return res.status(500).json({
         error: 'Sync failed',
         message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
+        fallback: 'Worker service unavailable. Please try again later.'
       });
-    } finally {
-      syncInProgress = false;
     }
   } 
   
   else if (req.method === 'GET') {
     // Get sync status
+    const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
+    const activeJob = activeJobs.get(userId);
+
+    if (activeJob) {
+      try {
+        // Check job status with worker
+        const statusResponse = await fetch(`${WORKER_URL}/jobs/${activeJob.jobId}`, {
+          headers: {
+            'Authorization': `Bearer ${WORKER_SECRET}`
+          },
+          timeout: 5000
+        });
+
+        if (statusResponse.ok) {
+          const jobStatus = await statusResponse.json();
+
+          // Update local tracking
+          if (jobStatus.status === 'completed' || jobStatus.status === 'failed') {
+            activeJobs.delete(userId);
+          }
+
+          return res.status(200).json({
+            syncInProgress: jobStatus.status === 'processing',
+            jobId: activeJob.jobId,
+            status: jobStatus.status,
+            startedAt: activeJob.startedAt,
+            progress: jobStatus.progress,
+            message: `Sync ${jobStatus.status}`,
+            result: jobStatus.result
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to check job status:', error);
+      }
+    }
+
     return res.status(200).json({
-      syncInProgress,
-      message: syncInProgress ? 'Sync in progress' : 'No sync running'
+      syncInProgress: false,
+      message: 'No sync running'
     });
   }
   

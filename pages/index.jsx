@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { ADDON_VERSION } from '../lib/version';
 import ThemeToggle from '../components/ThemeToggle';
 
 export default function Home() {
@@ -42,7 +43,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-indigo-900/20">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-1/2 -left-1/2 w-96 h-96 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"></div>
@@ -79,24 +80,24 @@ export default function Home() {
               IMDb Watchlist
             </h1>
             
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-2 max-w-md mx-auto">
+            <p className="text-xl text-gray-600 dark:text-gray-100 mb-2 max-w-md mx-auto">
               Transform your IMDb watchlist into a personalized Stremio addon
             </p>
             
             <div className="flex flex-wrap justify-center gap-4 text-sm">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full">
+              <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-100 rounded-full">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Auto-sync
               </span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+              <span className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-100 rounded-full">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
                 Secure
               </span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+              <span className="inline-flex items-center gap-2 px-3 py-1 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-100 rounded-full">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
@@ -106,7 +107,7 @@ export default function Home() {
           </div>
 
           {/* Connection Form */}
-          <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
+          <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label htmlFor="imdbUserId" className="block text-sm font-semibold text-gray-900 dark:text-white mb-3">
@@ -128,7 +129,7 @@ export default function Home() {
                     </svg>
                   </div>
                 </div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">
                   Make sure your IMDb watchlist is public
                 </p>
               </div>
@@ -158,15 +159,15 @@ export default function Home() {
             </form>
 
             {/* Help Section */}
-            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-600">
               <details className="group">
-                <summary className="flex items-center justify-between cursor-pointer text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                <summary className="flex items-center justify-between cursor-pointer text-gray-700 dark:text-gray-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
                   <span className="text-sm font-medium">Need help finding your User ID?</span>
                   <svg className="w-4 h-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </summary>
-                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl text-sm text-gray-600 dark:text-gray-400">
+                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-sm text-gray-600 dark:text-gray-300">
                   <ol className="list-decimal list-inside space-y-2">
                     <li>Go to your IMDb profile</li>
                     <li>Copy the URL (looks like: imdb.com/user/ur12345678)</li>
@@ -184,7 +185,7 @@ export default function Home() {
       <footer className="relative z-10 py-4 mt-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Version 1.4.0 - Recently Added default ✨
+            Version {ADDON_VERSION} - Recently Added default ✨
           </p>
         </div>
       </footer>

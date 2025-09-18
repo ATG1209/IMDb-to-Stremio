@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { ADDON_VERSION } from '../lib/version';
 import ThemeToggle from '../components/ThemeToggle';
+import CatalogPreview from '../components/CatalogPreview';
 
 export default function SimpleDashboard() {
   const router = useRouter();
@@ -78,7 +79,7 @@ export default function SimpleDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 dark:from-purple-900/20 dark:via-pink-900/20 dark:to-indigo-900/20">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-1/2 -left-1/2 w-96 h-96 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"></div>
@@ -89,9 +90,9 @@ export default function SimpleDashboard() {
       <header className="relative z-10 pt-8 pb-4">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-8">
-            <button 
+            <button
               onClick={() => router.push('/')}
-              className="flex items-center space-x-2 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+              className="flex items-center space-x-2 text-gray-700 dark:text-gray-200 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -112,7 +113,7 @@ export default function SimpleDashboard() {
               Create Your Addon
             </h1>
             
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-600 dark:text-gray-100 max-w-2xl mx-auto">
               Connect your IMDb watchlist to generate a personalized Stremio addon
             </p>
           </div>
@@ -123,14 +124,14 @@ export default function SimpleDashboard() {
         <div className="max-w-2xl mx-auto">
           {!addonGenerated ? (
             /* Setup Form */
-            <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">
               {error && (
                 <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 rounded-r-xl">
                   <div className="flex items-center">
                     <svg className="w-5 h-5 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p className="text-red-700 dark:text-red-300 font-medium">{error}</p>
+                    <p className="text-red-700 dark:text-red-200 font-medium">{error}</p>
                   </div>
                 </div>
               )}
@@ -156,7 +157,7 @@ export default function SimpleDashboard() {
                       </svg>
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">
                     Your IMDb User ID (e.g., ur12345678) - make sure your watchlist is public
                   </p>
                 </div>
@@ -194,12 +195,12 @@ export default function SimpleDashboard() {
                     <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    <p className="text-green-700 dark:text-green-300 font-medium">{success}</p>
+                    <p className="text-green-700 dark:text-green-200 font-medium">{success}</p>
                   </div>
                 </div>
               )}
 
-              <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/50 p-8">
+              <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl mb-4 shadow-xl shadow-green-500/25">
                     <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +209,7 @@ export default function SimpleDashboard() {
                   </div>
                   
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Addon Ready!</h2>
-                  <p className="text-gray-600 dark:text-gray-300">
+                  <p className="text-gray-600 dark:text-gray-200">
                     Your personalized Stremio addon for <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold">{imdbUserId}</span>
                   </p>
                 </div>
@@ -237,14 +238,14 @@ export default function SimpleDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl p-6 border border-indigo-200 dark:border-indigo-700/30">
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-800/40 dark:to-purple-800/40 rounded-2xl p-6 border border-indigo-200 dark:border-indigo-600/50">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                       <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       How to Install in Stremio
                     </h3>
-                    <ol className="space-y-2 text-gray-700 dark:text-gray-300">
+                    <ol className="space-y-2 text-gray-700 dark:text-gray-200">
                       <li className="flex items-start">
                         <span className="inline-flex items-center justify-center w-6 h-6 bg-indigo-600 text-white text-xs font-bold rounded-full mr-3 mt-0.5">1</span>
                         <span>Open Stremio and go to the Addons section</span>
@@ -263,7 +264,7 @@ export default function SimpleDashboard() {
                   <div className="flex flex-col sm:flex-row gap-4">
                     <button
                       onClick={handleReset}
-                      className="flex-1 px-6 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all duration-200 flex items-center justify-center space-x-2"
+                      className="flex-1 px-6 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-xl transition-all duration-200 flex items-center justify-center space-x-2"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -283,6 +284,9 @@ export default function SimpleDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* Catalog Preview */}
+              <CatalogPreview userId={imdbUserId} />
             </div>
           )}
         </div>
