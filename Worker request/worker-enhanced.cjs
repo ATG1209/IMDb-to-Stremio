@@ -3,6 +3,49 @@ const puppeteer = require('puppeteer');
 const app = express();
 const port = 3003;
 
+// Enhanced stealth configuration
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+];
+
+const REFERRERS = [
+  'https://www.google.com/',
+  'https://www.bing.com/',
+  'https://duckduckgo.com/',
+  'https://www.imdb.com/'
+];
+
+// Enhanced random delay function
+const randomDelay = (min = 500, max = 2000) => {
+  return new Promise(resolve => {
+    const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+    setTimeout(resolve, delay);
+  });
+};
+
+// Human-like mouse movements simulation
+const simulateHumanBehavior = async (page) => {
+  try {
+    // Random mouse movements
+    const mouseX = Math.floor(Math.random() * 1920);
+    const mouseY = Math.floor(Math.random() * 1080);
+    await page.mouse.move(mouseX, mouseY);
+
+    // Random scroll
+    const scrollAmount = Math.floor(Math.random() * 500) + 100;
+    await page.evaluate((amount) => {
+      window.scrollBy(0, amount);
+    }, scrollAmount);
+
+    await randomDelay(200, 800);
+  } catch (error) {
+    // Silent fail for behavior simulation
+  }
+};
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -23,7 +66,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '2.3.4',
+    version: '2.3.7',
     service: 'vps-worker'
   });
 });
@@ -44,11 +87,11 @@ app.post('/jobs', async (req, res) => {
   try {
     console.log(`[VPS Worker] Starting breakthrough scrape for user ${imdbUserId}...`);
 
-    // Enhanced browser launch with error handling
+    // ENHANCED STEALTH BROWSER LAUNCH (v2.3.7)
     let browser;
     try {
       browser = await puppeteer.launch({
-        headless: true,
+        headless: 'new', // Use new headless mode
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -66,8 +109,40 @@ app.post('/jobs', async (req, res) => {
           '--disable-renderer-backgrounding',
           '--disable-background-networking',
           '--no-first-run',
-          '--no-default-browser-check'
-        ]
+          '--no-default-browser-check',
+          // ENHANCED STEALTH FLAGS
+          '--disable-blink-features=AutomationControlled',
+          '--disable-features=VizDisplayCompositor,VizServiceDisplay',
+          '--disable-ipc-flooding-protection',
+          '--disable-client-side-phishing-detection',
+          '--disable-component-update',
+          '--disable-domain-reliability',
+          '--disable-sync',
+          '--disable-features=TranslateUI',
+          '--disable-features=BlinkGenPropertyTrees',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-field-trial-config',
+          '--disable-back-forward-cache',
+          '--disable-hang-monitor',
+          '--disable-prompt-on-repost',
+          '--disable-popup-blocking',
+          '--disable-component-extensions-with-background-pages',
+          '--disable-extensions-file-access-check',
+          '--enable-features=NetworkService,NetworkServiceInProcess',
+          '--force-color-profile=srgb',
+          '--metrics-recording-only',
+          '--use-mock-keychain',
+          '--disable-search-engine-choice-screen',
+          '--disable-features=OptimizationHints',
+          // Residential-like settings
+          '--user-data-dir=/tmp/chrome-user-data',
+          '--enable-automation=false',
+          '--password-store=basic',
+          '--use-mock-keychain'
+        ],
+        ignoreDefaultArgs: ['--enable-automation'],
+        defaultViewport: null
       });
     } catch (browserError) {
       console.error('[VPS Worker] Browser launch failed:', browserError.message);
@@ -81,38 +156,142 @@ app.post('/jobs', async (req, res) => {
 
     const page = await browser.newPage();
 
-    // Enhanced stealth configuration for VPS
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-
-    // Additional headers to appear more like a real browser
-    await page.setExtraHTTPHeaders({
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'none',
-      'Sec-Fetch-User': '?1',
-      'Upgrade-Insecure-Requests': '1'
+    // ADVANCED STEALTH CONFIGURATION (v2.3.7)
+    await page.setViewport({
+      width: 1920 + Math.floor(Math.random() * 100),
+      height: 1080 + Math.floor(Math.random() * 100)
     });
 
-    // Override navigator properties to avoid detection
+    // Rotate user agents randomly
+    const randomUA = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+    await page.setUserAgent(randomUA);
+    console.log(`[VPS Worker] Using User-Agent: ${randomUA}`);
+
+    // Enhanced headers with rotation
+    const randomReferrer = REFERRERS[Math.floor(Math.random() * REFERRERS.length)];
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9,es;q=0.8,fr;q=0.7',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'max-age=0',
+      'DNT': '1',
+      'Referer': randomReferrer,
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-User': '?1',
+      'Sec-CH-UA': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      'Sec-CH-UA-Mobile': '?0',
+      'Sec-CH-UA-Platform': '"Windows"',
+      'Upgrade-Insecure-Requests': '1',
+      'Connection': 'keep-alive'
+    });
+
+    // ADVANCED ANTI-DETECTION MEASURES
     await page.evaluateOnNewDocument(() => {
+      // Remove webdriver property
       Object.defineProperty(navigator, 'webdriver', {
         get: () => undefined,
       });
 
+      // Mock plugins array with realistic data
       Object.defineProperty(navigator, 'plugins', {
-        get: () => [1, 2, 3, 4, 5],
+        get: () => {
+          return [
+            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+            { name: 'Native Client', filename: 'internal-nacl-plugin' }
+          ];
+        },
       });
 
+      // Enhanced language settings
       Object.defineProperty(navigator, 'languages', {
-        get: () => ['en-US', 'en'],
+        get: () => ['en-US', 'en', 'es'],
+      });
+
+      // Mock platform data
+      Object.defineProperty(navigator, 'platform', {
+        get: () => 'Win32',
+      });
+
+      // Override permissions API
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Notification.permission }) :
+          originalQuery(parameters)
+      );
+
+      // Mock chrome runtime
+      if (!window.chrome) {
+        window.chrome = {};
+      }
+      if (!window.chrome.runtime) {
+        window.chrome.runtime = {
+          onConnect: undefined,
+          onMessage: undefined
+        };
+      }
+
+      // Override automation indicators
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_JSON;
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_Object;
+      delete window.cdc_adoQpoasnfa76pfcZLmcfl_Proxy;
+
+      // Mock device memory
+      Object.defineProperty(navigator, 'deviceMemory', {
+        get: () => 8,
+      });
+
+      // Mock hardware concurrency
+      Object.defineProperty(navigator, 'hardwareConcurrency', {
+        get: () => 4,
+      });
+
+      // Mock connection
+      Object.defineProperty(navigator, 'connection', {
+        get: () => ({
+          effectiveType: '4g',
+          rtt: 100,
+          downlink: 2.0
+        }),
       });
     });
+
+    // Request interception for header modification
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const headers = Object.assign({}, request.headers(), {
+        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"'
+      });
+
+      request.continue({ headers });
+    });
+
+    // Simulate realistic browsing behavior before actual scraping
+    console.log(`[VPS Worker] Warming up session with realistic behavior...`);
+    try {
+      // Visit Google first to establish session
+      await page.goto('https://www.google.com', { waitUntil: 'networkidle0', timeout: 10000 });
+      await randomDelay(1000, 3000);
+      await simulateHumanBehavior(page);
+
+      // Then visit IMDb homepage
+      await page.goto('https://www.imdb.com', { waitUntil: 'networkidle0', timeout: 15000 });
+      await randomDelay(2000, 4000);
+      await simulateHumanBehavior(page);
+
+      console.log(`[VPS Worker] Session warmed up successfully`);
+    } catch (warmupError) {
+      console.warn(`[VPS Worker] Session warmup failed:`, warmupError.message);
+      // Continue anyway
+    }
 
     // BREAKTHROUGH PAGINATION STRATEGY: Multi-page extraction (v2.3.4)
     const urlConfigs = [
@@ -136,20 +315,42 @@ app.post('/jobs', async (req, res) => {
       try {
         console.log(`[VPS Worker] Processing ${config.name}: ${config.url}`);
 
-        // Enhanced navigation with retries
+        // ENHANCED NAVIGATION WITH HUMAN SIMULATION (v2.3.7)
         let navigationSuccess = false;
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        for (let attempt = 1; attempt <= 5; attempt++) {
           try {
+            console.log(`[VPS Worker] Attempt ${attempt}: Navigating to ${config.name}...`);
+
+            // Human-like delay before navigation
+            await randomDelay(1000, 3000);
+
+            // Simulate realistic navigation
             await page.goto(config.url, {
-              timeout: 30000,
-              waitUntil: 'networkidle2'
+              timeout: 45000,
+              waitUntil: 'networkidle0'
             });
+
+            // Simulate human reading time
+            await randomDelay(2000, 5000);
+            await simulateHumanBehavior(page);
+
             navigationSuccess = true;
+            console.log(`[VPS Worker] Navigation successful for ${config.name}`);
             break;
           } catch (navError) {
             console.log(`[VPS Worker] Navigation attempt ${attempt} failed for ${config.name}:`, navError.message);
-            if (attempt < 3) {
-              await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+            if (attempt < 5) {
+              // Exponential backoff with randomization
+              const backoffTime = (2000 * attempt) + Math.floor(Math.random() * 2000);
+              console.log(`[VPS Worker] Waiting ${backoffTime}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, backoffTime));
+
+              // Try different user agent on retry
+              if (attempt > 2) {
+                const newUA = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+                await page.setUserAgent(newUA);
+                console.log(`[VPS Worker] Switched to new User-Agent: ${newUA}`);
+              }
             }
           }
         }
@@ -159,7 +360,9 @@ app.post('/jobs', async (req, res) => {
           continue;
         }
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Additional human behavior simulation
+        await randomDelay(1500, 3500);
+        await simulateHumanBehavior(page);
 
         // Enhanced 403 handling with fallback strategies
         const pageContent = await page.content();
@@ -186,25 +389,49 @@ app.post('/jobs', async (req, res) => {
           }
         }
 
-        // OPTIMIZED SCROLLING: Faster performance (v2.3.4)
-        console.log(`[VPS Worker] Scrolling ${config.name} page...`);
+        // HUMAN-LIKE SCROLLING WITH ANTI-DETECTION (v2.3.7)
+        console.log(`[VPS Worker] Starting human-like scrolling for ${config.name}...`);
         await page.evaluate(async () => {
           const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+          const randomDelay = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
           let previousCount = 0;
           let stableCount = 0;
 
-          // Optimized scrolling with faster performance
-          for (let i = 0; i < 25; i++) {
-            window.scrollTo(0, document.body.scrollHeight);
-            await sleep(800); // Optimized delay
+          // HUMAN-LIKE SCROLLING PATTERN
+          for (let i = 0; i < 30; i++) {
+            // Simulate human scrolling patterns
+            const scrollAmount = Math.floor(Math.random() * 500) + 300;
+            const currentPosition = window.pageYOffset;
+            const targetPosition = Math.min(currentPosition + scrollAmount, document.body.scrollHeight);
+
+            // Smooth scroll simulation
+            const scrollSteps = 5 + Math.floor(Math.random() * 5);
+            const stepSize = (targetPosition - currentPosition) / scrollSteps;
+
+            for (let step = 0; step < scrollSteps; step++) {
+              window.scrollTo(0, currentPosition + (stepSize * step));
+              await sleep(randomDelay(50, 150));
+            }
+
+            // Final position
+            window.scrollTo(0, targetPosition);
+
+            // Human-like reading pause
+            await sleep(randomDelay(800, 2000));
+
+            // Random small movements
+            if (Math.random() > 0.7) {
+              window.scrollBy(0, randomDelay(-50, 50));
+              await sleep(randomDelay(200, 500));
+            }
 
             const currentCount = document.querySelectorAll('a[href*="/title/"]').length;
-            console.log(`[SCROLL ${i + 1}] Current title links: ${currentCount}`);
+            console.log(`[HUMAN-SCROLL ${i + 1}] Position: ${Math.floor(window.pageYOffset)}, Links: ${currentCount}`);
 
             if (currentCount === previousCount) {
               stableCount++;
-              if (stableCount >= 3) {
-                console.log(`[SCROLL COMPLETE] No new items for 3 rounds, stopping at ${currentCount} items`);
+              if (stableCount >= 4) {
+                console.log(`[SCROLL COMPLETE] Stable at ${currentCount} items for 4 rounds`);
                 break;
               }
             } else {
@@ -212,18 +439,35 @@ app.post('/jobs', async (req, res) => {
             }
             previousCount = currentCount;
 
-            // Early exit optimization
-            if (currentCount >= 250 && i > 10) {
-              console.log(`[SCROLL OPTIMIZATION] Found ${currentCount} items, checking for stability...`);
-              await sleep(300);
+            // Check if we've reached the bottom
+            if (window.pageYOffset + window.innerHeight >= document.body.scrollHeight - 100) {
+              console.log(`[SCROLL COMPLETE] Reached page bottom with ${currentCount} items`);
+              await sleep(randomDelay(1000, 2000)); // Final wait
+              break;
+            }
+
+            // Breakthrough detection with human-like behavior
+            if (currentCount >= 250 && i > 15) {
+              console.log(`[BREAKTHROUGH CHECK] Found ${currentCount} items, verifying stability...`);
+              await sleep(randomDelay(500, 1500));
             }
           }
 
-          // Optimized DOM stabilization
-          console.log('[DOM STABILIZATION] Waiting for DOM to fully stabilize...');
-          await sleep(2000);
+          // Human-like final review scroll
+          console.log('[FINAL REVIEW] Human-like page review...');
+          await sleep(randomDelay(1000, 2000));
+
+          // Scroll to top gradually
+          const currentPos = window.pageYOffset;
+          const scrollToTopSteps = 8;
+          for (let step = 0; step < scrollToTopSteps; step++) {
+            const targetPos = currentPos * (1 - (step + 1) / scrollToTopSteps);
+            window.scrollTo(0, targetPos);
+            await sleep(randomDelay(200, 400));
+          }
+
           window.scrollTo(0, 0);
-          await sleep(1500);
+          await sleep(randomDelay(1500, 2500));
         });
 
         // BREAKTHROUGH EXTRACTION: Pre-filtering + Enhanced extraction (v2.3.4)
@@ -420,7 +664,7 @@ app.post('/jobs', async (req, res) => {
                 searchResponse = await fetch(searchUrl, {
                   timeout: 5000,
                   headers: {
-                    'User-Agent': 'VPS-Worker/2.3.4'
+                    'User-Agent': 'VPS-Worker/2.3.7'
                   }
                 });
 
@@ -476,7 +720,7 @@ app.post('/jobs', async (req, res) => {
                   const detailResponse = await fetch(detailUrl, {
                     timeout: 3000,
                     headers: {
-                      'User-Agent': 'VPS-Worker/2.3.4'
+                      'User-Agent': 'VPS-Worker/2.3.7'
                     }
                   });
 
@@ -530,7 +774,7 @@ app.post('/jobs', async (req, res) => {
       extractionPages: urlConfigs.length,
       lastUpdated: new Date().toISOString(),
       source: 'vps-worker',
-      version: '2.3.4',
+      version: '2.3.7',
       enhanced: process.env.TMDB_API_KEY ? true : false,
       metadata: {
         moviesCount: items.filter(i => i.type === 'movie').length,
@@ -572,7 +816,7 @@ app.post('/jobs', async (req, res) => {
       message: userMessage,
       details: error.message,
       timestamp: new Date().toISOString(),
-      version: '2.3.4',
+      version: '2.3.7',
       userId: imdbUserId
     });
   }
