@@ -69,12 +69,13 @@ class VPSWorkerClient {
 
       const result = await response.json();
 
-      if (result.success && result.data) {
+      if (result.success && result.data && result.data.length > 0) {
         console.log(`[VPSWorker] Successfully scraped ${result.data.length} items`);
         return result.data;
       } else {
-        console.warn('[VPSWorker] No data returned:', result);
-        return [];
+        console.warn('[VPSWorker] No data returned or empty result:', result);
+        // CRITICAL FIX: Throw error to trigger fallback when VPS worker returns 0 items
+        throw new Error(`VPS Worker returned no items: ${result.message || 'Empty result'}`);
       }
 
     } catch (error) {
