@@ -85,21 +85,19 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
       'Upgrade-Insecure-Requests': '1',
     });
 
-    // Set longer timeouts for pagination strategy
-    page.setDefaultTimeout(60000);
-    page.setDefaultNavigationTimeout(60000);
+    // Optimized timeouts for faster performance
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(30000);
 
-    // PAGINATION STRATEGY: Match exact URL format from user's browser
+    // OPTIMIZED PAGINATION STRATEGY: Only process pages with content (performance boost)
     const urlConfigs = [
       {
-        name: 'page-1',
-        url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all`,
-        priority: 1
+        name: 'page-1-newest',
+        url: `https://www.imdb.com/user/${userId}/watchlist?sort=created:desc&view=detail`,
       },
       {
-        name: 'page-2',
-        url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all&page=2`,
-        priority: 2
+        name: 'page-2-newest',
+        url: `https://www.imdb.com/user/${userId}/watchlist?sort=created:desc&view=detail&page=2`,
       }
     ];
 
@@ -114,210 +112,331 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
       try {
         console.log(`[fetchWatchlist] Scrolling ${sortName} page to load all items...`);
 
-        const finalCount = await page.evaluate(async () => {
+        // Capture browser console logs
+        const consoleLogs: string[] = [];
+        await page.evaluateOnNewDocument(() => {
+          const originalLog = console.log;
+          console.log = (...args) => {
+            (window as any).capturedLogs = (window as any).capturedLogs || [];
+            (window as any).capturedLogs.push(args.map(arg =>
+              typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
+            ).join(' '));
+            originalLog.apply(console, args);
+          };
+        });
+
+        // ENHANCED EXTRACTION: Comprehensive diagnostics and improved extraction logic
+        const extractionResult = await page.evaluate(async () => {
           const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-          for (let i = 0; i < 25; i++) { // Reduced scrolling for speed
+          console.log('[EXTRACTION START] Beginning enhanced extraction with full diagnostics');
+
+          // First, aggressive scrolling to load all items
+          let previousCount = 0;
+          let stableRounds = 0;
+
+          for (let i = 0; i < 25; i++) {
             window.scrollTo(0, document.body.scrollHeight);
-            await sleep(800);
+            await sleep(800); // Faster scrolling for performance
 
-            const currentCount = Math.max(
-              document.querySelectorAll('.lister-item').length,
-              document.querySelectorAll('.ipc-poster-card').length,
-              document.querySelectorAll('a[href*="/title/"]').length
-            );
+            const currentCount = document.querySelectorAll('a[href*="/title/"]').length;
+            console.log(`[SCROLL ${i + 1}] Current title links: ${currentCount}`);
 
-            if (i > 3 && currentCount > 0 && currentCount >= 200) {
-              // Stop early if we have a good amount
-              break;
+            // Check if we've stopped finding new items
+            if (currentCount === previousCount) {
+              stableRounds++;
+              if (stableRounds >= 3) {
+                console.log(`[SCROLL COMPLETE] No new items for 3 rounds, stopping at ${currentCount} items`);
+                break;
+              }
+            } else {
+              stableRounds = 0;
+            }
+            previousCount = currentCount;
+
+            // PERFORMANCE: Early exit if we hit expected page limit
+            if (currentCount >= 250 && i > 10) {
+              console.log(`[SCROLL OPTIMIZATION] Found ${currentCount} items, checking for stability...`);
+              await sleep(300); // Quick final check
             }
           }
 
+          // Optimized DOM stabilization - faster processing
+          console.log('[DOM STABILIZATION] Waiting for DOM to fully stabilize...');
+          await sleep(2000); // Reduced from 5000ms for faster processing
           window.scrollTo(0, 0);
-          const finalTitleCount = document.querySelectorAll('a[href*="/title/"]').length;
-          return finalTitleCount;
+          await sleep(1500); // Reduced from 3000ms for faster processing
+
+          // PHASE 1: MULTIPLE EXTRACTION METHOD ANALYSIS
+          console.log('[PHASE 1] Analyzing different extraction methods...');
+
+          // Method 1: .lister-item (detail view)
+          const listerItems = Array.from(document.querySelectorAll('.lister-item'));
+          console.log(`[METHOD 1] .lister-item: Found ${listerItems.length} items`);
+
+          // Method 2: .ipc-poster-card (grid view)
+          const ipcItems = Array.from(document.querySelectorAll('.ipc-poster-card'));
+          console.log(`[METHOD 2] .ipc-poster-card: Found ${ipcItems.length} items`);
+
+          // Method 3: All title links
+          const allLinks = Array.from(document.querySelectorAll('a[href*="/title/"]'));
+          console.log(`[METHOD 3] a[href*="/title/"]: Found ${allLinks.length} items`);
+
+          // Method 4: Enhanced link detection with different patterns
+          const titleLinks1 = Array.from(document.querySelectorAll('a[href^="/title/"]'));
+          const titleLinks2 = Array.from(document.querySelectorAll('a[href*="imdb.com/title/"]'));
+          console.log(`[METHOD 4A] a[href^="/title/"]: Found ${titleLinks1.length} items`);
+          console.log(`[METHOD 4B] a[href*="imdb.com/title/"]: Found ${titleLinks2.length} items`);
+
+          // PHASE 2: SAMPLE ANALYSIS FROM DIFFERENT POSITIONS
+          console.log('[PHASE 2] Sampling items from different positions...');
+
+          // Sample from beginning (1-10)
+          console.log('[SAMPLE] First 10 items:');
+          allLinks.slice(0, 10).forEach((a, i) => {
+            const href = a.getAttribute('href') || '';
+            const text = (a.textContent || '').trim();
+            const match = href.match(/\/title\/(tt\d+)/);
+            console.log(`  ${i+1}. ${match ? match[1] : 'NO-ID'}: "${text.substring(0, 50)}"`);
+          });
+
+          // Sample from middle (200-210)
+          if (allLinks.length > 200) {
+            console.log('[SAMPLE] Items 200-210:');
+            allLinks.slice(199, 210).forEach((a, i) => {
+              const href = a.getAttribute('href') || '';
+              const text = (a.textContent || '').trim();
+              const match = href.match(/\/title\/(tt\d+)/);
+              console.log(`  ${i+200}. ${match ? match[1] : 'NO-ID'}: "${text.substring(0, 50)}"`);
+            });
+          }
+
+          // Sample from end (last 10)
+          if (allLinks.length > 10) {
+            console.log('[SAMPLE] Last 10 items:');
+            allLinks.slice(-10).forEach((a, i) => {
+              const href = a.getAttribute('href') || '';
+              const text = (a.textContent || '').trim();
+              const match = href.match(/\/title\/(tt\d+)/);
+              const actualIndex = allLinks.length - 10 + i;
+              console.log(`  ${actualIndex+1}. ${match ? match[1] : 'NO-ID'}: "${text.substring(0, 50)}"`);
+            });
+          }
+
+          // PHASE 3: PRE-FILTER EMPTY LINKS TO ELIMINATE DUPLICATES
+          console.log('[PHASE 3] Pre-filtering empty links to eliminate duplicates...');
+
+          // Filter out empty links before processing to solve duplication issue
+          const filteredLinks = allLinks.filter((a, originalIndex) => {
+            const href = a.getAttribute('href') || '';
+            const text = (a.textContent || '').trim();
+
+            // Keep link if it has meaningful text (not empty, not just IMDb ID, not generic text)
+            const hasMeaningfulText = text &&
+              text.length > 0 &&
+              !text.match(/^(tt\d+|View title|›|\s*)$/) &&
+              text.length > 2;
+
+            // Log filtering decisions for first/last few items
+            if (originalIndex < 10 || originalIndex > allLinks.length - 10) {
+              console.log(`[FILTER ${originalIndex + 1}] "${text}" → ${hasMeaningfulText ? 'KEEP' : 'SKIP'}`);
+            }
+
+            return hasMeaningfulText;
+          });
+
+          console.log(`[PRE-FILTER] Reduced from ${allLinks.length} links to ${filteredLinks.length} links with meaningful text`);
+
+          const extractedItems = [];
+          const seenIds = new Set();
+          let skippedCount = 0;
+          let noIdCount = 0;
+          let noTitleCount = 0;
+
+          // Process filtered links (no more duplicates!)
+          filteredLinks.forEach((a, index) => {
+            try {
+              const href = a.getAttribute('href') || '';
+
+              // Enhanced regex patterns for IMDb ID extraction
+              const patterns = [
+                /\/title\/(tt\d+)/,           // Standard: /title/tt123456
+                /imdb\.com\/title\/(tt\d+)/,  // Full URL: imdb.com/title/tt123456
+                /(tt\d+)/                     // Fallback: just tt123456 anywhere
+              ];
+
+              let match = null;
+              for (const pattern of patterns) {
+                match = href.match(pattern);
+                if (match) break;
+              }
+
+              if (!match) {
+                noIdCount++;
+                if (index < 20 || index > allLinks.length - 20) {
+                  console.log(`[NO_ID ${index + 1}] href: "${href}"`);
+                }
+                return;
+              }
+
+              const id = match[1];
+
+              // Simple deduplication (no smart replacement needed since empty links are pre-filtered)
+              if (seenIds.has(id)) {
+                skippedCount++;
+                console.log(`[DUP ${index + 1}] Already processed ${id}`);
+                return;
+              }
+              seenIds.add(id);
+
+              // ENHANCED TITLE EXTRACTION with multiple fallbacks
+              let title = '';
+
+              // Method 1: Direct text content (cleaned)
+              const directText = (a.textContent || '').trim();
+              if (directText && !directText.match(/^(tt\d+|View title|›)$/) && directText.length > 0) {
+                title = directText;
+              }
+
+              // Method 2: Look for title in parent containers
+              if (!title) {
+                const parent = a.closest('li, .lister-item, .ipc-poster-card, [class*="title"], .cli-item');
+                if (parent) {
+                  const titleSelectors = [
+                    'h3 a', '.titleColumn a', '[data-testid="title"]',
+                    '.ipc-title', 'h3', '.cli-title', '.ipc-title-link-wrapper'
+                  ];
+
+                  for (const selector of titleSelectors) {
+                    const titleEl = parent.querySelector(selector);
+                    if (titleEl && titleEl !== a && titleEl.textContent && titleEl.textContent.trim()) {
+                      title = titleEl.textContent.trim();
+                      break;
+                    }
+                  }
+                }
+              }
+
+              // Method 3: Look for aria-label or title attributes
+              if (!title) {
+                title = a.getAttribute('aria-label') || a.getAttribute('title') || '';
+              }
+
+              // Method 4: Look in siblings for title
+              if (!title) {
+                const siblings = a.parentElement ? Array.from(a.parentElement.children) : [];
+                for (const sibling of siblings) {
+                  if (sibling !== a && sibling.textContent && sibling.textContent.trim().length > 2) {
+                    const siblingText = sibling.textContent.trim();
+                    if (!siblingText.match(/^(tt\d+|View title|\d{4}|›)$/)) {
+                      title = siblingText;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              // Clean up title
+              title = title.replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim();
+
+              // LENIENT FILTERING: Accept items even with minimal titles
+              if (!title || title.length === 0) {
+                title = `Movie ${id}`;
+                noTitleCount++;
+              }
+
+              // Get year with enhanced detection
+              let year = null;
+              const parent = a.closest('li, .lister-item, .ipc-poster-card, .cli-item');
+              if (parent) {
+                const parentText = parent.textContent || '';
+                const yearMatch = parentText.match(/\(?(19|20)\d{2}\)?/);
+                year = yearMatch ? yearMatch[0].replace(/[()]/g, '') : null;
+              }
+
+              // Determine type with enhanced detection
+              const contextText = parent ? (parent.textContent || '').toLowerCase() : '';
+              const type = (contextText.includes('series') || contextText.includes('tv') ||
+                           contextText.includes('show') || contextText.includes('episode')) ? 'tv' : 'movie';
+
+              extractedItems.push({
+                imdbId: id,
+                title,
+                year,
+                type,
+                poster: undefined,
+                imdbRating: 0,
+                numRatings: 0,
+                runtime: 0,
+                popularity: 0,
+                userRating: 0,
+              });
+
+              // Enhanced debug logging for key positions
+              if (index < 10 || (index >= 240 && index <= 260) || index > filteredLinks.length - 10) {
+                console.log(`[EXTRACT ${index + 1}] ${id}: "${title}" (${year}) [${type}]`);
+              }
+
+            } catch (e) {
+              console.log(`[ERROR] Failed to extract item ${index}:`, e);
+            }
+          });
+
+          // FINAL DIAGNOSTICS
+          console.log(`[DIAGNOSTICS] Original links found: ${allLinks.length}`);
+          console.log(`[DIAGNOSTICS] After pre-filtering: ${filteredLinks.length}`);
+          console.log(`[DIAGNOSTICS] Successfully extracted: ${extractedItems.length}`);
+          console.log(`[DIAGNOSTICS] Skipped duplicates: ${skippedCount}`);
+          console.log(`[DIAGNOSTICS] No IMDb ID found: ${noIdCount}`);
+          console.log(`[DIAGNOSTICS] No title found (used fallback): ${noTitleCount}`);
+          console.log(`[DIAGNOSTICS] Filtering effectiveness: ${((filteredLinks.length / allLinks.length) * 100).toFixed(1)}% retained`);
+
+          console.log(`[EXTRACTION COMPLETE] Final count: ${extractedItems.length} items from ${filteredLinks.length} filtered links (${allLinks.length} total)`);
+
+          // Return both extraction results and captured logs
+          return {
+            extractedItems,
+            logs: (window as any).capturedLogs || []
+          };
         });
 
-        console.log(`[fetchWatchlist] ${sortName}: Found ${finalCount} items after scrolling`);
-        await page.waitForTimeout(2000);
+        // Display captured browser console logs in server output
+        if (extractionResult.logs && extractionResult.logs.length > 0) {
+          console.log(`\n[BROWSER CONSOLE - ${sortName}] Captured ${extractionResult.logs.length} log entries:`);
+          extractionResult.logs.forEach((log: string, index: number) => {
+            console.log(`[BROWSER ${index + 1}] ${log}`);
+          });
+          console.log(`[BROWSER CONSOLE - ${sortName}] End of captured logs\n`);
+        }
+
+        const extractedItems = extractionResult.extractedItems || [];
+
+        console.log(`[fetchWatchlist] ${sortName}: Found ${extractedItems.length} items after incremental extraction`);
+
+        // Apply offset for proper newest-first ordering
+        const itemsWithOffset = extractedItems.map((item, index) => ({
+          ...item,
+          addedAt: new Date(Date.now() - (pageOffset + index) * 1000).toISOString()
+        }));
+
+        return itemsWithOffset;
 
       } catch (e) {
-        console.log(`[fetchWatchlist] ${sortName}: Scroll loading failed:`, e);
+        console.log(`[fetchWatchlist] ${sortName}: Incremental extraction failed:`, e);
+        return [];
       }
 
-      // Extract watchlist items
-      return await page.evaluate((pageOffset) => {
-      const normalize = (arr: any[]) => arr.filter(item => item && item.imdbId && item.title).map((x, index) => {
-        const addedAt = new Date(Date.now() - (pageOffset + index) * 1000).toISOString();
-        return {
-          imdbId: x.imdbId,
-          title: (x.title || '').replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim(),
-          year: x.year,
-          type: x.type === 'tv' ? 'tv' : 'movie',
-          poster: x.poster || undefined,
-          imdbRating: x.imdbRating || 0,
-          numRatings: x.numRatings || 0,
-          runtime: x.runtime || 0,
-          popularity: x.popularity || 0,
-          userRating: x.userRating || 0,
-          addedAt,
-        };
-      });
-
-      // Extract from different DOM structures
-      const lister = Array.from(document.querySelectorAll('.lister-item')).map((el) => {
-        try {
-          const a = el.querySelector('h3 a[href*="/title/"]');
-          const href = a ? a.getAttribute('href') : '';
-          const id = href ? (href.match(/tt\d+/) || [])[0] || '' : '';
-          const title = a ? (a.textContent || '').trim() : '';
-          const yearEl = el.querySelector('.lister-item-year, .secondaryInfo');
-          const yearText = yearEl ? yearEl.textContent || '' : '';
-          const year = (yearText.match(/(19|20)\d{2}/) || [])[0];
-          const img = el.querySelector('img[src]');
-          const text = (el.textContent || '').toLowerCase();
-          const type = text.includes('tv series') || text.includes('mini series') || text.includes('series') ? 'tv' : 'movie';
-
-          // Debug TV series detection
-          if (type === 'tv') {
-            console.log(`[TV Debug] Found TV series: "${title}" (${id}) - detected from text: "${text.substring(0, 200)}"`);
-          }
-
-          const ratingEl = el.querySelector('.ratings-bar .inline-block strong');
-          const imdbRating = ratingEl ? parseFloat((ratingEl.textContent || '').trim() || '0') || 0 : 0;
-
-          return id && title ? {
-            imdbId: id,
-            title,
-            year,
-            type,
-            poster: img ? img.src : undefined,
-            imdbRating,
-            numRatings: 0,
-            runtime: 0,
-            popularity: 0,
-            userRating: 0,
-          } : null;
-        } catch (e) {
-          return null;
-        }
-      });
-
-      const ipc = Array.from(document.querySelectorAll('.ipc-poster-card')).map((el) => {
-        try {
-          const a = el.querySelector('a[href*="/title/"]');
-          const href = a ? a.getAttribute('href') : '';
-          const id = href ? (href.match(/tt\d+/) || [])[0] || '' : '';
-          const titleEl = el.querySelector('[data-testid="title"]');
-          const title = (titleEl ? titleEl.textContent : (a ? a.textContent : '')).trim();
-          const metaEl = el.querySelector('[data-testid="metadata"]');
-          const meta = metaEl ? metaEl.textContent || '' : '';
-          const year = (meta.match(/(19|20)\d{2}/) || [])[0];
-          const img = el.querySelector('img[src]');
-          const tagText = (el.textContent || '').toLowerCase();
-          const type = tagText.includes('series') ? 'tv' : 'movie';
-
-          // Debug TV series detection
-          if (type === 'tv') {
-            console.log(`[TV Debug Method 2] Found TV series: "${title}" (${id}) - detected from text: "${tagText.substring(0, 200)}"`);
-          }
-
-          return id && title ? {
-            imdbId: id,
-            title,
-            year,
-            type,
-            poster: img ? img.src : undefined,
-            imdbRating: 0,
-            numRatings: 0,
-            runtime: 0,
-            popularity: 0,
-            userRating: 0,
-          } : null;
-        } catch (e) {
-          return null;
-        }
-      });
-
-      // Fallback: extract from all title links
-      const links = Array.from(document.querySelectorAll('a[href*="/title/"]'))
-        .map((a) => {
-          let id = '';
-          if (a.href) {
-            const match = a.href.match(/\/title\/(tt\d+)/) || a.href.match(/(tt\d+)/);
-            id = match ? match[1] : '';
-          }
-
-          let title = (a.textContent || '').trim();
-          title = title.replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim();
-
-          if (!id || !title || title.length < 3) return null;
-
-          const parent = a.closest('li, .titleColumn, .cli-item, [class*="item"]');
-          let year = null;
-          if (parent) {
-            const parentText = parent.textContent || '';
-            const yearMatch = parentText.match(/\(?(19|20)\d{2}\)?/);
-            year = yearMatch ? yearMatch[0].replace(/[()]/g, '') : null;
-          }
-
-          const contextText = parent ? (parent.textContent || '').toLowerCase() : '';
-          const type = contextText.includes('series') || contextText.includes('tv') ? 'tv' : 'movie';
-
-          // Debug TV series detection
-          if (type === 'tv') {
-            console.log(`[TV Debug Method 3] Found TV series: "${title}" (${id}) - detected from text: "${contextText.substring(0, 200)}"`);
-          }
-
-          return {
-            imdbId: id,
-            title,
-            year,
-            type,
-            poster: undefined,
-            imdbRating: 0,
-            numRatings: 0,
-            runtime: 0,
-            popularity: 0,
-            userRating: 0,
-          };
-        }).filter(Boolean);
-
-      // Remove duplicates
-      const uniqueLinks = links.reduce((acc: any[], current) => {
-        if (current && !acc.find(item => item.imdbId === current.imdbId)) {
-          acc.push(current);
-        }
-        return acc;
-      }, []);
-
-      // Choose the method that gives us the most items
-      const normalizedLister = normalize(lister);
-      const normalizedIpc = normalize(ipc);
-      const normalizedLinks = normalize(uniqueLinks);
-
-      let chosen = normalizedLister;
-      if (normalizedIpc.length > chosen.length) {
-        chosen = normalizedIpc;
-      }
-      if (normalizedLinks.length > chosen.length) {
-        chosen = normalizedLinks;
-      }
-
-      return chosen;
-    }, pageOffset);
+      // OLD EXTRACTION LOGIC replaced by incremental method above
     }
 
-    // MULTI-URL EXTRACTION: Try each sort configuration
+    // MULTIPLE VIEW EXTRACTION: Try different views to get all items
     for (const config of urlConfigs) {
       try {
         console.log(`[fetchWatchlist] Processing ${config.name} (${config.url})`);
+        await page.goto(config.url, { timeout: 30000, waitUntil: 'networkidle2' });
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-        await page.goto(config.url, { timeout: 45000, waitUntil: 'networkidle2' });
-        await page.waitForTimeout(1500);
-
-        const pageOffset = config.name === 'page-1' ? 0 : 250; // Page 1 = newest, Page 2 = older
-        const pageItems = await extractItemsFromCurrentPage(config.name, pageOffset);
+        const pageItems = await extractItemsFromCurrentPage(config.name, allItems.length);
         console.log(`[fetchWatchlist] ${config.name}: Extracted ${pageItems.length} items`);
 
         // Add new items (deduplicate by IMDb ID)
@@ -332,30 +451,36 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
 
         console.log(`[fetchWatchlist] ${config.name}: Added ${newItemsCount} new items (total: ${allItems.length})`);
 
-        // If we're getting close to 500 items, we can stop
-        if (allItems.length > 450) {
-          console.log(`[fetchWatchlist] Reached ${allItems.length} items, stopping multi-URL extraction`);
+        // PERFORMANCE: Early exit if no new items found (saves time on empty pages)
+        if (newItemsCount === 0 && allItems.length > 250) {
+          console.log(`[fetchWatchlist] OPTIMIZATION: No new items from ${config.name}, skipping remaining pages`);
+          break;
+        }
+
+        // PERFORMANCE: Early exit if we have good coverage (400+ items = ~80% of typical watchlists)
+        if (allItems.length >= 400) {
+          console.log(`[fetchWatchlist] OPTIMIZATION: Reached ${allItems.length} items (excellent coverage), stopping early`);
           break;
         }
 
       } catch (error) {
         console.error(`[fetchWatchlist] Error processing ${config.name}:`, error);
-        // Continue with next URL configuration
+        // Continue with next view
       }
     }
 
-    // Prioritize items based on sort order (newest first priority)
-    console.log(`[fetchWatchlist] MULTI-URL COMPLETE: Found ${allItems.length} total unique items`);
+    // Single page extraction complete
+    console.log(`[fetchWatchlist] SINGLE PAGE COMPLETE: Found ${allItems.length} total unique items`);
 
     // Debug content type distribution
     const movieCount = allItems.filter(item => item.type === 'movie').length;
     const tvCount = allItems.filter(item => item.type === 'tv').length;
     console.log(`[fetchWatchlist] Content breakdown: ${movieCount} movies, ${tvCount} TV series`);
 
-    // Reverse array since created:asc gives oldest first, but we want newest first
-    allItems.reverse();
+    // Sort items by addedAt to ensure newest-first order across all pages
+    allItems.sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
 
-    console.log(`[fetchWatchlist] Sorted array - first 3: ${allItems.slice(0, 3).map(x => x.title).join(', ')}`);
+    console.log(`[fetchWatchlist] Sorted newest-first - first 3: ${allItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
     // First, detect correct content types using TMDB
     if (allItems.length > 0) {
