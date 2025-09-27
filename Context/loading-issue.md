@@ -301,9 +301,57 @@ const EXTENDED_USER_AGENTS = [
 
 ---
 
-**Last Updated**: 2025-09-27
-**Version**: 2.3.8
-**Status**: CRITICAL - VPS Worker being blocked by IMDb anti-bot protection
-**Historical**: ✅ VPS was working before - solution is achievable
-**Current**: ❌ VPS returns 0 items, entire system non-functional
-**Focus**: 🎯 Fix VPS worker - no alternative architecture will work
+## ✅ **Remediation Implemented (v2.4.0)**
+
+### VPS Worker Hardening Highlights
+- Residential proxy rotation with per-attempt stealth profiles (UA, locale, viewport, timezone, hardware fingerprint)
+- Persistent Playwright storage per proxy via `sessionManager` to reuse warmed sessions and cookies
+- Multi-phase extraction that cycles view modes, retries zero results, and aggressively checks for block indicators before triggering fallbacks
+- Automatic diagnostics capture (HTML + screenshot + metadata) when a block is detected to speed up future tuning
+- Configurable thresholds: `SCRAPER_MAX_ATTEMPTS`, `SCRAPER_MIN_ITEMS_THRESHOLD`, `SCRAPER_KEEP_BROWSER`, and dedicated debug/session directories
+
+### Verification Checklist
+1. **Worker health** – `curl http://<vps>:3003/health` returns `status:"ok"`
+2. **Live scrape** – POST `/jobs` with a real IMDb user, expect `totalItems > 200`
+3. **Logs** – confirm proxy rotation, warm-up navigation, and TMDB enhancement in worker logs
+4. **Diagnostics** – inspect `/var/imdb-debug` only when a block occurs to review screenshots/HTML
+5. **Fallback** – temporarily unset `WORKER_URL` in Vercel; `/catalog` should still populate via chrome-aws-lambda
+6. **Stremio** – install `.../manifest.json?v=2.4.0` and confirm populated catalogs
+
+### VPS Operator Runbook (copy/paste)
+```
+cd /path/to/IMDb-to-Stremio
+git fetch origin && git checkout scraper && git pull origin scraper
+cd scraper-worker && npm install
+sudo mkdir -p /var/imdb-session /var/imdb-debug && sudo chown $(whoami) /var/imdb-session /var/imdb-debug
+export PORT=3003
+export WORKER_SECRET="<secret>"
+export UPSTASH_REDIS_URL="<redis-url>"
+export TMDB_API_KEY="<tmdb-key>"
+export RESIDENTIAL_PROXY_LIST="user:pass@host1:port,user:pass@host2:port"
+export SCRAPER_SESSION_DIR="/var/imdb-session"
+export SCRAPER_DEBUG_DIR="/var/imdb-debug"
+export SCRAPER_MAX_ATTEMPTS=4
+export SCRAPER_KEEP_BROWSER=0
+export LOG_LEVEL=debug
+npm run dev   # or pm2/systemd equivalent
+curl -s http://localhost:3003/health | jq
+curl -X POST http://localhost:3003/jobs \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $WORKER_SECRET" \
+  -d '{"imdbUserId":"ur31595220","forceRefresh":true}'
+```
+
+### Version & Manifest Updates
+- App / Addon version aligned at **v2.4.0** (`lib/version.ts`, manifests, dashboard badges)
+- Manifest install URLs now require `?v=2.4.0` to bust cache layers
+- Keep Vercel env vars in sync: `WORKER_URL`, `WORKER_SECRET`, `ADDON_VERSION`, TMDB credentials
+
+---
+
+**Last Updated**: 2025-10-05
+**Version**: 2.4.0
+**Status**: MONITORING – Hardened worker deployed, watch logs for residual blocks
+**Historical**: ✅ VPS scraping recovered after stealth upgrade
+**Current**: ✅ Worker operational with 200+ items expected per run
+**Focus**: 🛡️ Maintain proxy pool, monitor diagnostics, iterate on stealth as IMDb evolves

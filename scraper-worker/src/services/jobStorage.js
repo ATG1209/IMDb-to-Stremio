@@ -15,11 +15,11 @@ export const jobStorage = {
       const userJobsKey = STORAGE_KEYS.userJobs(job.imdbUserId);
 
       // Store job data (expires in 7 days)
-      await redisClient.setex(jobKey, 7 * 24 * 60 * 60, JSON.stringify(job));
+      await redisClient.setEx(jobKey, 7 * 24 * 60 * 60, JSON.stringify(job));
 
       // Add to user's job list (keep last 10 jobs per user)
-      await redisClient.lpush(userJobsKey, job.id);
-      await redisClient.ltrim(userJobsKey, 0, 9);
+      await redisClient.lPush(userJobsKey, job.id);
+      await redisClient.lTrim(userJobsKey, 0, 9);
       await redisClient.expire(userJobsKey, 7 * 24 * 60 * 60);
 
       logger.debug(`Job ${job.id} saved to storage`);
@@ -73,7 +73,7 @@ export const jobStorage = {
   async getLatestJobForUser(imdbUserId) {
     try {
       const userJobsKey = STORAGE_KEYS.userJobs(imdbUserId);
-      const jobIds = await redisClient.lrange(userJobsKey, 0, 0); // Get latest job ID
+      const jobIds = await redisClient.lRange(userJobsKey, 0, 0); // Get latest job ID
 
       if (jobIds.length === 0) {
         return null;
@@ -101,7 +101,7 @@ export const jobStorage = {
       if (imdbUserId) {
         // Get jobs for specific user
         const userJobsKey = STORAGE_KEYS.userJobs(imdbUserId);
-        jobIds = await redisClient.lrange(userJobsKey, offset, offset + limit - 1);
+        jobIds = await redisClient.lRange(userJobsKey, offset, offset + limit - 1);
       } else {
         // Get all job IDs (this is expensive, should be paginated)
         const pattern = STORAGE_KEYS.job('*');
@@ -130,7 +130,7 @@ export const jobStorage = {
       const resultKey = STORAGE_KEYS.jobResults(jobId);
 
       // Store result with 30-day expiration
-      await redisClient.setex(resultKey, 30 * 24 * 60 * 60, JSON.stringify(result));
+      await redisClient.setEx(resultKey, 30 * 24 * 60 * 60, JSON.stringify(result));
 
       logger.debug(`Result for job ${jobId} saved to storage`);
     } catch (error) {
