@@ -73,13 +73,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       watchlistItems = await fetchWatchlist(userId, { forceRefresh: force });
     }
     
-    // Filter by content type (items are already in newest-first order from fetch)
-    const sortedItems = watchlistItems.filter(item => {
+    // Filter by content type and reverse to get newest-first order (proven solution from v1.8.1)
+    const filteredItems = watchlistItems.filter(item => {
       if (type === 'movie') return item.type === 'movie';
       if (type === 'series') return item.type === 'tv';
       return true;
     });
-    console.log(`[Catalog] Items already in newest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
+
+    // CRITICAL FIX: Reverse array to get newest-first order (matches Stremlist behavior)
+    const sortedItems = [...filteredItems].reverse();
+    console.log(`[Catalog] Applied .reverse() for newest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
     // Convert to Stremio catalog format
     const metas = sortedItems.map(item => {

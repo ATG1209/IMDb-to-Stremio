@@ -77,29 +77,32 @@ app.post('/jobs', async (req, res) => {
       await page.waitForTimeout(2000);
     }
 
-    // Enhanced scrolling for pagination
-    console.log('[VPS Worker] Scrolling to load all items...');
+    // Enhanced scrolling for pagination (targeting 501+ items based on context docs)
+    console.log('[VPS Worker] Aggressive scrolling to load ALL items (501+)...');
     await page.evaluate(async () => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       let previousCount = 0;
       let stableCount = 0;
+      let breakthroughCount = 0;
 
-      for (let i = 0; i < 25; i++) {
+      // Aggressive scrolling with breakthrough detection at 250-item boundary
+      for (let i = 0; i < 35; i++) {
         window.scrollTo(0, document.body.scrollHeight);
-        await sleep(800);
+        await sleep(600); // Faster scrolling
 
-        const currentCount = Math.max(
-          document.querySelectorAll('.lister-item').length,
-          document.querySelectorAll('.ipc-poster-card').length,
-          document.querySelectorAll('a[href*="/title/"]').length
-        );
-
+        const currentCount = document.querySelectorAll('a[href*="/title/"]').length;
         console.log(`Scroll ${i + 1}: Found ${currentCount} items`);
+
+        // Detect 250-item breakthrough (from context docs)
+        if (currentCount > 250 && previousCount <= 250) {
+          breakthroughCount++;
+          console.log(`BREAKTHROUGH at ${currentCount} items! (previously ${previousCount})`);
+        }
 
         if (currentCount === previousCount) {
           stableCount++;
-          if (stableCount >= 3) {
-            console.log('Item count stable, stopping scroll');
+          if (stableCount >= 4) {
+            console.log(`Stable at ${currentCount} items, stopping scroll`);
             break;
           }
         } else {
@@ -108,13 +111,24 @@ app.post('/jobs', async (req, res) => {
 
         previousCount = currentCount;
 
-        // Break if we have a good number of items and haven't seen growth
-        if (i > 10 && currentCount > 200 && stableCount >= 2) {
+        // Enhanced stopping criteria for 501+ items
+        if (i > 15 && currentCount >= 500 && stableCount >= 2) {
+          console.log(`Reached ${currentCount} items (500+ target achieved)`);
           break;
         }
       }
 
+      // Final page analysis
+      const finalAnalysis = {
+        titleLinks: document.querySelectorAll('a[href*="/title/"]').length,
+        listerItems: document.querySelectorAll('.lister-item').length,
+        posterCards: document.querySelectorAll('.ipc-poster-card').length,
+        hasPosterCards: document.querySelectorAll('.ipc-poster-card').length > 0 ? 'YES' : 'NO'
+      };
+
+      console.log('Final page analysis:', JSON.stringify(finalAnalysis));
       window.scrollTo(0, 0);
+      await sleep(2000); // Allow page to settle
     });
 
     // Extract watchlist items with multiple strategies
@@ -155,8 +169,11 @@ app.post('/jobs', async (req, res) => {
           }
         }).filter(Boolean);
 
-        // Strategy 2: Extract from all title links as fallback
-        const linkItems = Array.from(document.querySelectorAll('a[href*="/title/"]')).map((a) => {
+        // Strategy 2: Enhanced extraction from ALL title links (targeting 501+ items)
+        const allLinks = Array.from(document.querySelectorAll('a[href*="/title/"]'));
+        console.log(`Found ${allLinks.length} total title links on page`);
+
+        const linkItems = allLinks.map((a, index) => {
           let id = '';
           if (a.href) {
             const match = a.href.match(/\/title\/(tt\d+)/) || a.href.match(/(tt\d+)/);
@@ -164,11 +181,14 @@ app.post('/jobs', async (req, res) => {
           }
 
           let title = (a.textContent || '').trim();
+          // Enhanced title cleaning from context docs
           title = title.replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim();
 
-          if (!id || !title || title.length < 3) return null;
+          // More lenient filtering for items 251+ (from pagination issue analysis)
+          if (!id || !title || title.length < 2) return null;
 
-          const parent = a.closest('li, .titleColumn, .cli-item, [class*="item"], .lister-item');
+          // Enhanced parent context detection
+          const parent = a.closest('li, .titleColumn, .cli-item, [class*="item"], .lister-item, .ipc-poster-card, [data-testid]');
           let year = null;
           if (parent) {
             const parentText = parent.textContent || '';
@@ -176,8 +196,16 @@ app.post('/jobs', async (req, res) => {
             year = yearMatch ? yearMatch[0].replace(/[()]/g, '') : null;
           }
 
-          const contextText = parent ? (parent.textContent || '').toLowerCase() : '';
-          const type = contextText.includes('series') || contextText.includes('tv') ? 'tv' : 'movie';
+          // Enhanced type detection
+          const contextText = (parent ? parent.textContent : '') + ' ' + (a.getAttribute('aria-label') || '');
+          const type = contextText.toLowerCase().includes('series') ||
+                      contextText.toLowerCase().includes('tv') ||
+                      contextText.toLowerCase().includes('season') ? 'tv' : 'movie';
+
+          // Debug logging for items after 250 threshold
+          if (index >= 250 && index < 260) {
+            console.log(`Item ${index + 1}: "${title}" (${id}) - Type: ${type}`);
+          }
 
           return {
             imdbId: id,
@@ -194,18 +222,22 @@ app.post('/jobs', async (req, res) => {
           };
         }).filter(Boolean);
 
-        // Remove duplicates from linkItems
-        const uniqueLinks = linkItems.reduce((acc, current) => {
-          if (current && !acc.find(item => item.imdbId === current.imdbId)) {
-            acc.push(current);
+        // Enhanced deduplication preserving order
+        const seenIds = new Set();
+        const uniqueLinks = linkItems.filter(item => {
+          if (seenIds.has(item.imdbId)) {
+            return false;
           }
-          return acc;
-        }, []);
+          seenIds.add(item.imdbId);
+          return true;
+        });
 
-        console.log(`Extraction results - Lister: ${listerItems.length}, Links: ${uniqueLinks.length}`);
+        console.log(`Extraction results - Lister: ${listerItems.length}, Unique Links: ${uniqueLinks.length}`);
+        console.log(`Breakthrough check: Links beyond 250: ${uniqueLinks.length - 250}`);
 
-        // Choose the method that gives us the most items
-        return listerItems.length > uniqueLinks.length ? listerItems : uniqueLinks;
+        // CRITICAL: Always prefer the link extraction method for maximum coverage
+        // This addresses the 250-item limit from the pagination issue docs
+        return uniqueLinks.length > listerItems.length ? uniqueLinks : listerItems;
       };
 
       return extractItems();
@@ -215,37 +247,85 @@ app.post('/jobs', async (req, res) => {
 
     console.log(`[VPS Worker] Scraped ${items.length} items for user ${imdbUserId}`);
 
-    // Enhance with TMDB data if API key available
+    // Enhanced TMDB integration with batch processing (based on context docs)
     if (process.env.TMDB_API_KEY && items.length > 0) {
       console.log(`[VPS Worker] Enhancing ${items.length} items with TMDB data...`);
 
-      // Simple TMDB enhancement (limit to first 60 for performance)
-      const enhanceLimit = Math.min(items.length, 60);
-      for (let i = 0; i < enhanceLimit; i++) {
-        const item = items[i];
-        try {
-          const tmdbUrl = `https://api.themoviedb.org/3/search/multi?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(item.title)}${item.year ? `&year=${item.year}` : ''}`;
-          const tmdbResponse = await fetch(tmdbUrl);
-          const tmdbData = await tmdbResponse.json();
+      // Enhanced TMDB processing - focus on movies first, increased limit
+      const enhanceLimit = Math.min(items.length, 120); // Increased from 60
+      const movieItems = items.filter(item => item.type === 'movie').slice(0, enhanceLimit);
+      const tvItems = items.filter(item => item.type === 'tv').slice(0, Math.min(20, enhanceLimit - movieItems.length));
+      const itemsToEnhance = [...movieItems, ...tvItems];
 
-          if (tmdbData.results && tmdbData.results.length > 0) {
-            const result = tmdbData.results[0];
-            if (result.poster_path) {
-              item.poster = `https://image.tmdb.org/t/p/w500${result.poster_path}`;
+      console.log(`[VPS Worker] Processing ${itemsToEnhance.length} items (${movieItems.length} movies, ${tvItems.length} TV)`);
+
+      // Batch processing for better performance
+      const batchSize = 15; // From context docs
+      for (let i = 0; i < itemsToEnhance.length; i += batchSize) {
+        const batch = itemsToEnhance.slice(i, i + batchSize);
+        console.log(`[VPS Worker] Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(itemsToEnhance.length/batchSize)}`);
+
+        await Promise.all(batch.map(async (item, index) => {
+          try {
+            // Delay within batch to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, index * 50));
+
+            const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(item.title)}${item.year ? `&year=${item.year}` : ''}`;
+            const searchResponse = await fetch(searchUrl);
+            const searchData = await searchResponse.json();
+
+            if (searchData.results && searchData.results.length > 0) {
+              const result = searchData.results[0];
+
+              // Enhanced poster handling
+              if (result.poster_path) {
+                item.poster = `https://image.tmdb.org/t/p/w500${result.poster_path}`;
+              }
+
+              // Enhanced metadata from context docs
+              if (result.media_type) {
+                item.type = result.media_type === 'tv' ? 'tv' : 'movie';
+              }
+
+              // Additional metadata enhancement
+              if (result.vote_average) {
+                item.imdbRating = result.vote_average;
+              }
+              if (result.vote_count) {
+                item.numRatings = result.vote_count;
+              }
+              if (result.popularity) {
+                item.popularity = result.popularity;
+              }
+
+              // Get detailed info for runtime (movies only)
+              if (item.type === 'movie' && result.id) {
+                try {
+                  const detailUrl = `https://api.themoviedb.org/3/movie/${result.id}?api_key=${process.env.TMDB_API_KEY}`;
+                  const detailResponse = await fetch(detailUrl);
+                  const detailData = await detailResponse.json();
+
+                  if (detailData.runtime) {
+                    item.runtime = detailData.runtime;
+                  }
+                } catch (detailError) {
+                  // Silent fail for detail requests
+                }
+              }
             }
-            if (result.media_type) {
-              item.type = result.media_type === 'tv' ? 'tv' : 'movie';
-            }
+          } catch (tmdbError) {
+            console.warn(`[VPS Worker] TMDB failed for ${item.title}:`, tmdbError.message);
           }
+        }));
 
-          // Rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (tmdbError) {
-          console.warn(`[VPS Worker] TMDB failed for ${item.title}:`, tmdbError);
+        // Delay between batches
+        if (i + batchSize < itemsToEnhance.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 
-      console.log(`[VPS Worker] Enhanced ${enhanceLimit} items with TMDB data`);
+      const enhancedCount = items.filter(item => item.poster || item.imdbRating > 0).length;
+      console.log(`[VPS Worker] Enhanced ${enhancedCount}/${items.length} items with TMDB data`);
     }
 
     return res.json({

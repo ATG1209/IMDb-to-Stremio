@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { vpsWorkerClient } from '../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../lib/fetch-watchlist';
 
 interface WatchlistItem {
@@ -43,9 +44,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log(`Fetching watchlist for user: ${userId}`);
+    console.log(`[Web App] Fetching watchlist for user: ${userId}`);
 
-    const items = await fetchWatchlist(userId);
+    let items = [];
+
+    // Try VPS worker first, fallback to direct scraping
+    const useWorker = process.env.WORKER_URL;
+
+    if (useWorker) {
+      try {
+        // Check worker health first
+        const isWorkerHealthy = await vpsWorkerClient.isHealthy();
+
+        if (isWorkerHealthy) {
+          console.log('[Web App] Using VPS worker for web app preview');
+          items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: false });
+
+          // Apply reverse order for newest-first (same fix as catalog)
+          items = [...items].reverse();
+        } else {
+          throw new Error('VPS worker is not healthy');
+        }
+      } catch (workerError) {
+        console.warn(`[Web App] VPS worker failed for ${userId}:`, workerError);
+
+        // Fallback to direct scraping
+        console.log('[Web App] Falling back to direct scraping');
+        items = await fetchWatchlist(userId);
+      }
+    } else {
+      // No worker configured, use direct scraping
+      items = await fetchWatchlist(userId);
+    }
 
     const response: WatchlistResponse = {
       items,
