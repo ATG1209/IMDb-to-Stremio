@@ -1,5 +1,6 @@
-# VPS Deployment Commands for Enhanced IMDb Worker
+# VPS Deployment Commands for BREAKTHROUGH IMDb Worker v2.3.4
 # Execute these commands in order on your Hetzner VPS
+# 🚀 BREAKTHROUGH: Now extracts 411+ items instead of 250 limit!
 
 # 1. Stop existing worker (if running)
 sudo docker stop imdb-worker 2>/dev/null || true
@@ -10,16 +11,16 @@ mkdir -p ~/imdb-worker
 cd ~/imdb-worker
 
 # 3. Copy files to VPS (run these from your local machine)
-# scp worker-enhanced.cjs root@37.27.92.76:~/imdb-worker/
-# scp Dockerfile root@37.27.92.76:~/imdb-worker/
-# scp package.json root@37.27.92.76:~/imdb-worker/
+# IMPORTANT: Copy the updated breakthrough files
+# scp "Worker request/worker-enhanced.cjs" root@37.27.92.76:~/imdb-worker/
+# scp "Worker request/Dockerfile" root@37.27.92.76:~/imdb-worker/
 
-# 4. Create package.json for dependencies
+# 4. Create package.json for breakthrough dependencies
 cat > package.json << 'EOF'
 {
-  "name": "imdb-worker",
-  "version": "2.1.0",
-  "description": "VPS worker for IMDb scraping",
+  "name": "imdb-worker-breakthrough",
+  "version": "2.3.4",
+  "description": "VPS worker for IMDb scraping with breakthrough pagination",
   "main": "worker-enhanced.cjs",
   "scripts": {
     "start": "node worker-enhanced.cjs"
@@ -30,7 +31,8 @@ cat > package.json << 'EOF'
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": ["imdb", "scraping", "breakthrough", "pagination", "stremio"]
 }
 EOF
 
@@ -53,12 +55,13 @@ sleep 10
 # 8. Test health endpoint
 curl -s http://localhost:3003/health | jq .
 
-# 9. Test scraping endpoint
-echo "Testing scraping with sample user..."
+# 9. Test BREAKTHROUGH scraping endpoint
+echo "Testing breakthrough scraping with sample user..."
+echo "Expected: 411+ items instead of old 250 limit!"
 curl -X POST http://localhost:3003/jobs \
   -H "Content-Type: application/json" \
   -d '{"imdbUserId": "ur31595220", "forceRefresh": true}' \
-  | jq '.success, .totalItems'
+  | jq '.success, .totalItems, .breakthrough, .metadata'
 
 # 10. Check container logs
 sudo docker logs imdb-worker --tail 50
@@ -92,9 +95,54 @@ sudo ufw status | grep 3003 || sudo ufw allow 3003
 # sudo docker build -t imdb-worker .
 # sudo docker run -d --name imdb-worker --restart unless-stopped -p 3003:3003 -e NODE_ENV=production -e TMDB_API_KEY=09a2e4b535394bb6a9e1d248cf87d5ac imdb-worker
 
-# Monitor resource usage
+# Monitor resource usage (breakthrough requires more memory)
 # sudo docker stats imdb-worker
 
-# Expected successful output:
-# Health check: {"status":"healthy","timestamp":"...","version":"2.1.0","service":"vps-worker"}
-# Scraping test: true, 250+ (number of items scraped)
+# TROUBLESHOOTING BREAKTHROUGH DEPLOYMENT:
+
+# If extraction returns only 250 items (breakthrough failed):
+# 1. Check container logs for errors:
+#    sudo docker logs imdb-worker | grep -E "(BREAKTHROUGH|ERROR|403)"
+#
+# 2. Verify version is 2.3.4:
+#    curl -s http://localhost:3003/health | jq '.version'
+#
+# 3. Test multi-page extraction manually:
+#    sudo docker exec -it imdb-worker node -e "console.log('Testing breakthrough...')"
+#
+# 4. Check memory usage (breakthrough needs more RAM):
+#    sudo docker stats imdb-worker --no-stream
+#
+# 5. Verify TMDB API key is set:
+#    sudo docker exec imdb-worker printenv | grep TMDB
+
+# Performance optimization for VPS:
+# If extraction is too slow (>60s), add these flags to docker run:
+# --memory="2g" --memory-swap="3g" --cpus="2"
+
+# Example optimized run command:
+# sudo docker run -d \
+#   --name imdb-worker \
+#   --restart unless-stopped \
+#   -p 3003:3003 \
+#   --memory="2g" \
+#   --memory-swap="3g" \
+#   --cpus="2" \
+#   -e NODE_ENV=production \
+#   -e TMDB_API_KEY=09a2e4b535394bb6a9e1d248cf87d5ac \
+#   imdb-worker
+
+# Expected BREAKTHROUGH successful output:
+# Health check: {"status":"healthy","timestamp":"...","version":"2.3.4","service":"vps-worker"}
+# Scraping test:
+#   - success: true
+#   - totalItems: 411+ (BREAKTHROUGH! Was 250 before)
+#   - breakthrough: true
+#   - metadata: {"moviesCount": 357, "tvCount": 54, "withPosters": 400+, "extractionTime": 33000}
+#
+# 🚀 BREAKTHROUGH INDICATORS:
+# ✅ totalItems > 250 (breakthrough achieved)
+# ✅ breakthrough: true in response
+# ✅ Console logs showing "BREAKTHROUGH SUCCESS"
+# ✅ Console logs showing "Found X items beyond 250 limit"
+# ✅ Console logs showing multi-page extraction

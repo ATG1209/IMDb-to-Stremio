@@ -45,7 +45,10 @@
       "mcp__vercel__get_deployment_build_logs",
       "mcp__vercel__list_teams",
       "mcp__vercel__list_projects",
-      "mcp__vercel__get_deployment"
+      "mcp__vercel__get_deployment",
+      "Bash(echo:*)",
+      "Bash(cat:*)",
+      "Read(//Users/at/Downloads/**)"
     ],
     "deny": [],
     "ask": []
