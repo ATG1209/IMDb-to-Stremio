@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { ADDON_VERSION } from '../lib/version';
+import { APP_VERSION, ADDON_VERSION } from '../lib/version';
 import ThemeToggle from '../components/ThemeToggle';
 import CatalogPreview from '../components/CatalogPreview';
 
@@ -116,6 +116,7 @@ export default function SimpleDashboard() {
             <p className="text-lg text-gray-600 dark:text-gray-100 max-w-2xl mx-auto">
               Connect your IMDb watchlist to generate a personalized Stremio addon
             </p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">App v{APP_VERSION} · Addon v{ADDON_VERSION}</p>
           </div>
         </div>
       </header>

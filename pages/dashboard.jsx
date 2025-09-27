@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import ThemeToggle from '../components/ThemeToggle';
-import { ADDON_VERSION } from '../lib/version';
+import { APP_VERSION, ADDON_VERSION } from '../lib/version';
 
 export default function Dashboard() {
   // const [user, setUser] = useState(null); // Unused until authentication is implemented
@@ -146,11 +146,14 @@ export default function Dashboard() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-200 dark:bg-gray-900/80 dark:border-gray-800">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-600">
-                IMDb → Stremio
-              </span>
-            </h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-bold">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-600">
+                  IMDb → Stremio
+                </span>
+              </h1>
+              <span className="text-xs text-gray-500 dark:text-gray-400">App v{APP_VERSION} · Addon v{ADDON_VERSION}</span>
+            </div>
             {config?.configured && (
               <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full dark:bg-green-900/40 dark:text-green-300">
                 ✓ Conectado
