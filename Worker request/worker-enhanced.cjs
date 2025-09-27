@@ -23,7 +23,7 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '2.1.0',
+    version: '2.3.4',
     service: 'vps-worker'
   });
 });
@@ -61,75 +61,76 @@ app.post('/jobs', async (req, res) => {
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
-    // Navigate to IMDb watchlist
-    const watchlistUrl = `https://www.imdb.com/user/${imdbUserId}/watchlist?ref_=up_nv_urwls_all`;
-    console.log(`[VPS Worker] Navigating to ${watchlistUrl}`);
-
-    await page.goto(watchlistUrl, { timeout: 45000, waitUntil: 'networkidle2' });
-    await page.waitForTimeout(2000);
-
-    // Check if we got 403 Forbidden, switch to grid view
-    const pageContent = await page.content();
-    if (pageContent.includes('403') || pageContent.includes('Forbidden') || pageContent.includes('blocked')) {
-      console.log('[VPS Worker] 403 detected, switching to grid view...');
-      const gridUrl = `https://www.imdb.com/user/${imdbUserId}/watchlist?view=grid`;
-      await page.goto(gridUrl, { timeout: 45000, waitUntil: 'networkidle2' });
-      await page.waitForTimeout(2000);
-    }
-
-    // Enhanced scrolling for pagination (targeting 501+ items based on context docs)
-    console.log('[VPS Worker] Aggressive scrolling to load ALL items (501+)...');
-    await page.evaluate(async () => {
-      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-      let previousCount = 0;
-      let stableCount = 0;
-      let breakthroughCount = 0;
-
-      // Aggressive scrolling with breakthrough detection at 250-item boundary
-      for (let i = 0; i < 35; i++) {
-        window.scrollTo(0, document.body.scrollHeight);
-        await sleep(600); // Faster scrolling
-
-        const currentCount = document.querySelectorAll('a[href*="/title/"]').length;
-        console.log(`Scroll ${i + 1}: Found ${currentCount} items`);
-
-        // Detect 250-item breakthrough (from context docs)
-        if (currentCount > 250 && previousCount <= 250) {
-          breakthroughCount++;
-          console.log(`BREAKTHROUGH at ${currentCount} items! (previously ${previousCount})`);
-        }
-
-        if (currentCount === previousCount) {
-          stableCount++;
-          if (stableCount >= 4) {
-            console.log(`Stable at ${currentCount} items, stopping scroll`);
-            break;
-          }
-        } else {
-          stableCount = 0;
-        }
-
-        previousCount = currentCount;
-
-        // Enhanced stopping criteria for 501+ items
-        if (i > 15 && currentCount >= 500 && stableCount >= 2) {
-          console.log(`Reached ${currentCount} items (500+ target achieved)`);
-          break;
-        }
+    // BREAKTHROUGH PAGINATION STRATEGY: Multi-page extraction (v2.3.4)
+    const urlConfigs = [
+      {
+        name: 'page-1-newest',
+        url: `https://www.imdb.com/user/${imdbUserId}/watchlist?sort=created:desc&view=detail`,
+      },
+      {
+        name: 'page-2-newest',
+        url: `https://www.imdb.com/user/${imdbUserId}/watchlist?sort=created:desc&view=detail&page=2`,
       }
+    ];
 
-      // Final page analysis
-      const finalAnalysis = {
-        titleLinks: document.querySelectorAll('a[href*="/title/"]').length,
-        listerItems: document.querySelectorAll('.lister-item').length,
-        posterCards: document.querySelectorAll('.ipc-poster-card').length,
-        hasPosterCards: document.querySelectorAll('.ipc-poster-card').length > 0 ? 'YES' : 'NO'
-      };
+    let allItems = [];
+    const seenIds = new Set();
 
-      console.log('Final page analysis:', JSON.stringify(finalAnalysis));
-      window.scrollTo(0, 0);
-      await sleep(2000); // Allow page to settle
-    });
+    console.log(`[VPS Worker] BREAKTHROUGH: Multi-page extraction to overcome 250-item limit`);
+
+    // Process each page for complete coverage
+    for (const config of urlConfigs) {
+      try {
+        console.log(`[VPS Worker] Processing ${config.name}: ${config.url}`);
+        await page.goto(config.url, { timeout: 30000, waitUntil: 'networkidle2' });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Check for 403 and handle
+        const pageContent = await page.content();
+        if (pageContent.includes('403') || pageContent.includes('Forbidden')) {
+          console.log(`[VPS Worker] 403 detected on ${config.name}, skipping...`);
+          continue;
+        }
+
+        // OPTIMIZED SCROLLING: Faster performance (v2.3.4)
+        console.log(`[VPS Worker] Scrolling ${config.name} page...`);
+        await page.evaluate(async () => {
+          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+          let previousCount = 0;
+          let stableCount = 0;
+
+          // Optimized scrolling with faster performance
+          for (let i = 0; i < 25; i++) {
+            window.scrollTo(0, document.body.scrollHeight);
+            await sleep(800); // Optimized delay
+
+            const currentCount = document.querySelectorAll('a[href*="/title/"]').length;
+            console.log(`[SCROLL ${i + 1}] Current title links: ${currentCount}`);
+
+            if (currentCount === previousCount) {
+              stableCount++;
+              if (stableCount >= 3) {
+                console.log(`[SCROLL COMPLETE] No new items for 3 rounds, stopping at ${currentCount} items`);
+                break;
+              }
+            } else {
+              stableCount = 0;
+            }
+            previousCount = currentCount;
+
+            // Early exit optimization
+            if (currentCount >= 250 && i > 10) {
+              console.log(`[SCROLL OPTIMIZATION] Found ${currentCount} items, checking for stability...`);
+              await sleep(300);
+            }
+          }
+
+          // Optimized DOM stabilization
+          console.log('[DOM STABILIZATION] Waiting for DOM to fully stabilize...');
+          await sleep(2000);
+          window.scrollTo(0, 0);
+          await sleep(1500);
+        });
 
     // Extract watchlist items with multiple strategies
     const items = await page.evaluate(() => {
@@ -184,8 +185,9 @@ app.post('/jobs', async (req, res) => {
           // Enhanced title cleaning from context docs
           title = title.replace(/^\d+\.\s*/, '').replace(/\s+/g, ' ').trim();
 
-          // More lenient filtering for items 251+ (from pagination issue analysis)
-          if (!id || !title || title.length < 2) return null;
+          // CRITICAL: Ultra-lenient filtering for items 251+ (from pagination docs)
+          // Items 251-501 exist as minimal <a> tags without rich metadata
+          if (!id) return null; // Only require IMDb ID, accept empty/minimal titles
 
           // Enhanced parent context detection
           const parent = a.closest('li, .titleColumn, .cli-item, [class*="item"], .lister-item, .ipc-poster-card, [data-testid]');
@@ -209,7 +211,7 @@ app.post('/jobs', async (req, res) => {
 
           return {
             imdbId: id,
-            title,
+            title: title || `Movie ${id}`, // Fallback title for items 251+ (from pagination docs)
             year,
             type,
             poster: undefined,
@@ -234,6 +236,13 @@ app.post('/jobs', async (req, res) => {
 
         console.log(`Extraction results - Lister: ${listerItems.length}, Unique Links: ${uniqueLinks.length}`);
         console.log(`Breakthrough check: Links beyond 250: ${uniqueLinks.length - 250}`);
+
+        // Enhanced diagnostics from pagination docs
+        if (uniqueLinks.length > 250) {
+          console.log(`Sample titles from positions 1-5:`, uniqueLinks.slice(0, 5).map(x => x.title));
+          console.log(`Sample titles from positions 245-255:`, uniqueLinks.slice(244, 254).map(x => x.title));
+          console.log(`Sample titles from positions 495-501:`, uniqueLinks.slice(494, 501).map(x => x.title));
+        }
 
         // CRITICAL: Always prefer the link extraction method for maximum coverage
         // This addresses the 250-item limit from the pagination issue docs
