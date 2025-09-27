@@ -57,6 +57,11 @@ Optional:
 - `DEFAULT_IMDB_USER_ID` - Default user for testing
 - `LOG_LEVEL` - Logging level (debug, info, warn, error)
 - `PORT` - Server port (default: 3000)
+- `RESIDENTIAL_PROXY_LIST` - Comma or newline separated list of residential proxies (`user:pass@host:port` or `http://user:pass@host:port`)
+- `SCRAPER_MAX_ATTEMPTS` - Maximum scrape retries before failing (default: 4)
+- `SCRAPER_SESSION_DIR` - Directory to persist per-proxy storage state (default: `.session-store` in project root)
+- `SCRAPER_DEBUG_DIR` - Directory to write diagnostic screenshots/HTML when blocked (optional)
+- `SCRAPER_KEEP_BROWSER` - Set to `1` to reuse the same browser after each job (default: new session per job)
 
 ## Local Development
 

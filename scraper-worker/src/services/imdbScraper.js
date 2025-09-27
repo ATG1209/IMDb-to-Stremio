@@ -1,334 +1,833 @@
 import { chromium } from 'playwright';
+import crypto from 'crypto';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { logger } from '../utils/logger.js';
 import { tmdbService } from './tmdbService.js';
+import { sessionManager } from './sessionManager.js';
+
+class ImdbBlockError extends Error {
+  constructor(message, meta = {}) {
+    super(message);
+    this.name = 'ImdbBlockError';
+    this.code = 'IMDB_BLOCKED';
+    this.meta = meta;
+  }
+}
+
+const DEFAULT_LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-accelerated-2d-canvas',
+  '--disable-gpu',
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--window-size=1920,1080'
+];
+
+const DEFAULT_HEADERS = {
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  DNT: '1',
+  Connection: 'keep-alive',
+  'Upgrade-Insecure-Requests': '1'
+};
+
+const USER_AGENT_POOL = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.184 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.216 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.139 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_7_10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.129 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.140 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.110 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.200 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.122 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.152 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.140 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.5790.171 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_6_9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.122 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.149 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15',
+  'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0',
+  'Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.105 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.216 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.90 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.89 Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.6167.178 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.90 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edg/121.0.2277.128 Chrome/121.0.6167.140 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edg/120.0.2210.144 Chrome/120.0.6099.129 Safari/537.36'
+];
+
+const LANGUAGE_PROFILES = [
+  ['en-US', 'en'],
+  ['en-GB', 'en'],
+  ['en-CA', 'en'],
+  ['en-AU', 'en'],
+  ['fr-FR', 'fr', 'en'],
+  ['es-ES', 'es', 'en'],
+  ['de-DE', 'de', 'en'],
+  ['it-IT', 'it', 'en'],
+  ['pt-BR', 'pt-BR', 'pt', 'en'],
+  ['nl-NL', 'nl', 'en'],
+  ['sv-SE', 'sv', 'en'],
+  ['pl-PL', 'pl', 'en'],
+  ['da-DK', 'da', 'en']
+];
+
+const TIMEZONES = [
+  'America/New_York',
+  'America/Los_Angeles',
+  'America/Toronto',
+  'America/Sao_Paulo',
+  'Europe/Amsterdam',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Paris',
+  'Europe/Madrid',
+  'Europe/Prague',
+  'Europe/Rome',
+  'Asia/Tokyo',
+  'Asia/Singapore',
+  'Asia/Hong_Kong',
+  'Australia/Sydney'
+];
+
+const VIEWPORTS = [
+  { width: 1920, height: 1080 },
+  { width: 1600, height: 900 },
+  { width: 1536, height: 864 },
+  { width: 1440, height: 900 },
+  { width: 1366, height: 768 },
+  { width: 1280, height: 720 }
+];
+
+const WARMUP_URLS = [
+  'https://www.google.com/?hl=en',
+  'https://www.imdb.com/?ref_=nv_home'
+];
+
+const BLOCK_PATTERNS = [
+  /Access Denied/i,
+  /Request blocked/i,
+  /unusual traffic/i,
+  /captcha/i,
+  /robot check/i,
+  /forbidden/i,
+  /not authorized/i,
+  /px-captcha/i,
+  /amicontent/i
+];
+
+const MAX_NAVIGATION_TIMEOUT = parseInt(process.env.SCRAPER_NAV_TIMEOUT || '60000', 10);
+
+function randomChoice(items) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function uniqueSequence(values) {
+  const seen = new Set();
+  const sequence = [];
+  values.forEach(value => {
+    if (!seen.has(value)) {
+      seen.add(value);
+      sequence.push(value);
+    }
+  });
+  return sequence;
+}
+
+function parseProxyEntry(entry) {
+  const value = entry.trim();
+  if (!value) {
+    return null;
+  }
+
+  const formatted = value.startsWith('http') ? value : `http://${value}`;
+  try {
+    const url = new URL(formatted);
+    const hostPort = `${url.hostname}:${url.port || '80'}`;
+    const id = crypto.createHash('sha1').update(hostPort).digest('hex').slice(0, 8);
+
+    return {
+      server: `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}`,
+      username: url.username || undefined,
+      password: url.password || undefined,
+      id,
+      mask: hostPort
+    };
+  } catch (error) {
+    logger.warn('Skipping invalid proxy entry', { entry });
+    return null;
+  }
+}
+
+function parseProxyList(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  const tokens = raw
+    .split(/\r?\n|,/)
+    .map(token => token.trim())
+    .filter(Boolean);
+
+  const proxies = tokens
+    .map(parseProxyEntry)
+    .filter(Boolean);
+
+  if (proxies.length === 0) {
+    logger.warn('Proxy list configured but no valid proxies parsed');
+  }
+
+  return proxies;
+}
+
+async function waitFor(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export class ImdbScraper {
   constructor() {
     this.browser = null;
+    this.context = null;
     this.page = null;
+    this.currentProfile = null;
+    this.proxyPool = parseProxyList(process.env.RESIDENTIAL_PROXY_LIST || process.env.IMDB_PROXY_LIST || '');
+    this.lastProxyId = null;
+    this.maxAttempts = parseInt(process.env.SCRAPER_MAX_ATTEMPTS || '4', 10);
+    this.keepBrowserOpen = process.env.SCRAPER_KEEP_BROWSER === '1';
+    this.debugDir = process.env.SCRAPER_DEBUG_DIR || null;
+    this.minItemsThreshold = parseInt(process.env.SCRAPER_MIN_ITEMS_THRESHOLD || '10', 10);
   }
 
   async initialize() {
+    await this.rotateSession({ attempt: 1, reason: 'initialization' });
+  }
+
+  async rotateSession({ attempt, reason }) {
+    await this.cleanup();
+
+    const profile = this.buildStealthProfile(attempt);
+    this.currentProfile = profile;
+
+    const launchOptions = {
+      headless: true,
+      args: DEFAULT_LAUNCH_ARGS
+    };
+
+    if (profile.proxy) {
+      launchOptions.proxy = {
+        server: profile.proxy.server,
+        username: profile.proxy.username,
+        password: profile.proxy.password
+      };
+    }
+
+    logger.info('Launching Chromium with stealth profile', {
+      attempt,
+      reason,
+      proxy: profile.proxy ? profile.proxy.mask : 'direct',
+      timezone: profile.timezone,
+      locale: profile.locale,
+      userAgent: profile.userAgent
+    });
+
+    this.browser = await chromium.launch(launchOptions);
+
+    const storageState = await sessionManager.load(profile.sessionKey);
+
+    const contextOptions = {
+      viewport: profile.viewport,
+      userAgent: profile.userAgent,
+      locale: profile.locale,
+      timezoneId: profile.timezone,
+      extraHTTPHeaders: DEFAULT_HEADERS
+    };
+
+    if (storageState) {
+      contextOptions.storageState = storageState;
+    }
+
+    this.context = await this.browser.newContext(contextOptions);
+
+    await this.context.addInitScript(({ fingerprint }) => {
+      const override = (key, value) => {
+        try {
+          Object.defineProperty(navigator, key, {
+            get: () => value,
+            configurable: true
+          });
+        } catch (_) {
+          navigator[key] = value;
+        }
+      };
+
+      override('webdriver', undefined);
+      override('languages', fingerprint.languages);
+      override('platform', fingerprint.platform);
+      override('hardwareConcurrency', fingerprint.hardwareConcurrency);
+      override('deviceMemory', fingerprint.deviceMemory);
+      override('maxTouchPoints', fingerprint.maxTouchPoints);
+
+      const originalPermissions = window.navigator.permissions && window.navigator.permissions.query;
+      if (originalPermissions) {
+        window.navigator.permissions.query = parameters => (
+          parameters && parameters.name === 'notifications'
+            ? Promise.resolve({ state: 'denied' })
+            : originalPermissions(parameters)
+        );
+      }
+    }, {
+      fingerprint: {
+        languages: profile.languages,
+        platform: profile.platform,
+        hardwareConcurrency: profile.hardwareConcurrency,
+        deviceMemory: profile.deviceMemory,
+        maxTouchPoints: profile.maxTouchPoints
+      }
+    });
+
+    this.page = await this.context.newPage();
+    this.page.setDefaultTimeout(MAX_NAVIGATION_TIMEOUT);
+    this.page.setDefaultNavigationTimeout(MAX_NAVIGATION_TIMEOUT);
+  }
+
+  buildStealthProfile(attempt) {
+    const userAgent = randomChoice(USER_AGENT_POOL);
+    const viewport = randomChoice(VIEWPORTS) || { width: 1920, height: 1080 };
+    const languages = randomChoice(LANGUAGE_PROFILES) || ['en-US', 'en'];
+    const timezone = randomChoice(TIMEZONES) || 'America/New_York';
+    const locale = languages[0] || 'en-US';
+
+    let platform = 'Win32';
+    if (userAgent.includes('Macintosh') || userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+      platform = 'MacIntel';
+    } else if (userAgent.includes('Linux') && !userAgent.includes('Android')) {
+      platform = 'Linux x86_64';
+    } else if (userAgent.includes('Android')) {
+      platform = 'Linux armv8l';
+    }
+
+    const hardwareConcurrency = randomChoice([4, 6, 8, 12]);
+    const deviceMemory = randomChoice([4, 8, 16]);
+    const maxTouchPoints = userAgent.includes('Mobile') || userAgent.includes('iPhone') ? randomChoice([2, 3, 5]) : 0;
+
+    const proxy = this.selectProxy(attempt);
+    const sessionKey = proxy ? `proxy-${proxy.id}` : 'direct';
+
+    const viewSequence = uniqueSequence([
+      randomChoice(['detail', 'grid', 'simple']),
+      'detail',
+      'grid'
+    ]);
+
+    const sortOrder = randomChoice(['created:desc', 'date_added:desc', 'user_rating:desc']) || 'created:desc';
+
+    return {
+      userAgent,
+      viewport,
+      languages,
+      timezone,
+      locale,
+      platform,
+      hardwareConcurrency,
+      deviceMemory,
+      maxTouchPoints,
+      proxy,
+      sessionKey,
+      viewSequence,
+      sortOrder
+    };
+  }
+
+  selectProxy(attempt) {
+    if (!this.proxyPool || this.proxyPool.length === 0) {
+      return null;
+    }
+
+    if (this.proxyPool.length === 1) {
+      this.lastProxyId = this.proxyPool[0].id;
+      return this.proxyPool[0];
+    }
+
+    const available = this.proxyPool.filter(proxy => proxy.id !== this.lastProxyId);
+    const choice = randomChoice(available.length > 0 ? available : this.proxyPool);
+    this.lastProxyId = choice.id;
+    logger.info('Selected residential proxy', { attempt, proxy: choice.mask });
+    return choice;
+  }
+
+  async warmUpSession(profile) {
+    for (const url of WARMUP_URLS) {
+      try {
+        await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await waitFor(randomInt(600, 1200));
+      } catch (error) {
+        logger.debug('Warm-up navigation failed', { url, error: error.message });
+      }
+    }
+
+    // IMDb specific warmup to set cookies before hitting watchlist
     try {
-      logger.info('Launching browser...');
-
-      this.browser = await chromium.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--disable-gpu',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--window-size=1920,1080'
-        ]
+      await this.page.goto('https://www.imdb.com/offsite/?page-action=ft-generic', {
+        waitUntil: 'domcontentloaded',
+        timeout: 15000
       });
-
-      this.page = await this.browser.newPage();
-      await this.page.setViewport({ width: 1920, height: 1080 });
-      await this.page.setUserAgent(
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      );
-
-      // Set additional headers to avoid detection
-      await this.page.setExtraHTTPHeaders({
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-      });
-
-      // Set longer timeouts for pagination strategy
-      this.page.setDefaultTimeout(60000);
-      this.page.setDefaultNavigationTimeout(60000);
-
-      logger.info('✅ Browser initialized successfully');
+      await waitFor(randomInt(500, 900));
     } catch (error) {
-      logger.error('❌ Failed to initialize browser:', error);
-      throw error;
+      logger.debug('IMDb warm-up failed', { error: error.message });
     }
   }
 
   async scrapeWatchlist(userId) {
     if (!this.browser || !this.page) {
-      throw new Error('Browser not initialized. Call initialize() first.');
+      await this.rotateSession({ attempt: 1, reason: 'first-run' });
     }
 
-    logger.info(`Starting watchlist scrape for user ${userId}`);
-
-    try {
-      // URL configurations for pagination strategy
-      const urlConfigs = [
-        {
-          name: 'page-1',
-          url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all`,
-          priority: 1
-        },
-        {
-          name: 'page-2',
-          url: `https://www.imdb.com/user/${userId}/watchlist?ref_=up_nv_urwls_all&page=2`,
-          priority: 2
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
+      try {
+        if (!this.browser || !this.page) {
+          await this.rotateSession({ attempt, reason: `retry-${attempt}` });
         }
-      ];
 
-      let allItems = [];
-      const seenIds = new Set();
+        logger.info('Starting watchlist extraction', {
+          userId,
+          attempt,
+          proxy: this.currentProfile?.proxy ? this.currentProfile.proxy.mask : 'direct'
+        });
 
-      // Extract items from each page
-      for (const config of urlConfigs) {
-        try {
-          logger.info(`Processing ${config.name} (${config.url})`);
+        await this.warmUpSession(this.currentProfile);
+        await waitFor(randomInt(400, 900));
 
-          await this.page.goto(config.url, { timeout: 45000, waitUntil: 'networkidle' });
-          await this.page.waitForTimeout(1500);
+        const items = await this.performExtraction(userId, attempt);
 
-          const pageOffset = config.name === 'page-1' ? 0 : 250;
-          const pageItems = await this.extractItemsFromCurrentPage(config.name, pageOffset);
-
-          logger.info(`${config.name}: Extracted ${pageItems.length} items`);
-
-          // Add new items (deduplicate by IMDb ID)
-          let newItemsCount = 0;
-          for (const item of pageItems) {
-            if (!seenIds.has(item.imdbId)) {
-              seenIds.add(item.imdbId);
-              allItems.push(item);
-              newItemsCount++;
-            }
-          }
-
-          logger.info(`${config.name}: Added ${newItemsCount} new items (total: ${allItems.length})`);
-
-          // Stop if we have enough items
-          if (allItems.length > 450) {
-            logger.info(`Reached ${allItems.length} items, stopping extraction`);
-            break;
-          }
-
-        } catch (error) {
-          logger.error(`Error processing ${config.name}:`, error);
-          // Continue with next URL configuration
-        }
-      }
-
-      logger.info(`Extraction complete: Found ${allItems.length} total unique items`);
-
-      // Reverse array for newest-first order
-      allItems.reverse();
-
-      // Enhance with TMDB data
-      if (allItems.length > 0) {
-        logger.info(`Enhancing ${allItems.length} items with TMDB data...`);
-        try {
-          // Detect content types
-          const contentTypes = await tmdbService.detectContentTypeBatch(
-            allItems.map(item => ({ title: item.title, year: item.year }))
-          );
-
-          // Get posters
-          const tmdbPosters = await tmdbService.getPosterBatch(
-            allItems.map(item => ({ title: item.title, year: item.year }))
-          );
-
-          // Apply enhancements
-          allItems.forEach(item => {
-            const key = `${item.title}_${item.year || 'unknown'}`;
-            const detectedType = contentTypes.get(key);
-            const poster = tmdbPosters.get(key);
-
-            if (detectedType) {
-              item.type = detectedType;
-            }
-            if (poster) {
-              item.poster = poster;
-            }
+        if (!items || items.length === 0 || items.length < this.minItemsThreshold) {
+          throw new ImdbBlockError('Extraction returned insufficient items', {
+            userId,
+            itemCount: items ? items.length : 0
           });
+        }
 
-          const posterCount = allItems.filter(item => item.poster).length;
-          const movieCount = allItems.filter(item => item.type === 'movie').length;
-          const tvCount = allItems.filter(item => item.type === 'tv').length;
+        // Persist storage state for the current proxy/session
+        const storageState = await this.context.storageState();
+        await sessionManager.save(this.currentProfile.sessionKey, storageState);
 
-          logger.info(`TMDB enhancement complete: ${posterCount}/${allItems.length} items have posters (${movieCount} movies, ${tvCount} TV series)`);
+        if (!this.keepBrowserOpen) {
+          await this.cleanup();
+        }
 
-        } catch (error) {
-          logger.error('Error enhancing with TMDB data:', error);
+        logger.info('Watchlist extraction completed', {
+          userId,
+          itemCount: items.length,
+          attempt
+        });
+
+        return items;
+
+      } catch (error) {
+        const isBlock = error instanceof ImdbBlockError || error.code === 'IMDB_BLOCKED';
+        logger.warn('Watchlist extraction attempt failed', {
+          attempt,
+          userId,
+          reason: error.message,
+          blocked: isBlock,
+          proxy: this.currentProfile?.proxy ? this.currentProfile.proxy.mask : 'direct'
+        });
+
+        await this.captureDiagnostics(`attempt-${attempt}`, error);
+
+        await this.cleanup();
+
+        if (attempt === this.maxAttempts) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('Failed to scrape watchlist after maximum retries');
+  }
+
+  async performExtraction(userId, attempt) {
+    const allItems = [];
+    const seenIds = new Set();
+
+    for (const view of this.currentProfile.viewSequence) {
+      const pageOneItems = await this.extractPage({ userId, pageNumber: 1, view, attempt });
+      this.mergeItems(allItems, seenIds, pageOneItems);
+
+      if (allItems.length >= 250) {
+        break;
+      }
+
+      const pageTwoItems = await this.extractPage({ userId, pageNumber: 2, view, attempt });
+      this.mergeItems(allItems, seenIds, pageTwoItems);
+
+      if (allItems.length > 0) {
+        break;
+      }
+    }
+
+    logger.info('Extraction summary', {
+      userId,
+      uniqueItems: allItems.length
+    });
+
+    allItems.reverse();
+
+    await this.enhanceWithTmdb(allItems);
+
+    return allItems;
+  }
+
+  mergeItems(target, seenIds, items) {
+    for (const item of items) {
+      if (!seenIds.has(item.imdbId)) {
+        seenIds.add(item.imdbId);
+        target.push(item);
+      }
+    }
+  }
+
+  async extractPage({ userId, pageNumber, view, attempt }) {
+    const baseUrl = `https://www.imdb.com/user/${userId}/watchlist`;
+    const params = new URLSearchParams();
+    params.set('sort', this.currentProfile.sortOrder);
+    params.set('view', view);
+    if (pageNumber > 1) {
+      params.set('page', String(pageNumber));
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+    const label = `page-${pageNumber}-${view}`;
+
+    logger.info('Navigating to watchlist page', { url, label, attempt });
+
+    const response = await this.page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: MAX_NAVIGATION_TIMEOUT
+    });
+
+    if (response && !response.ok()) {
+      throw new ImdbBlockError(`HTTP ${response.status()} for ${label}`, {
+        status: response.status(),
+        statusText: response.statusText(),
+        url
+      });
+    }
+
+    await waitFor(randomInt(800, 1300));
+
+    const blockReason = await this.detectBlocking(label);
+    if (blockReason) {
+      throw new ImdbBlockError(blockReason, { label, url });
+    }
+
+    const pageOffset = pageNumber === 1 ? 0 : 250;
+    const items = await this.extractItemsFromCurrentPage(label, pageOffset);
+
+    if (!items || items.length === 0) {
+      logger.warn('Extraction returned zero items', { label, url });
+      await waitFor(randomInt(400, 700));
+      const retryItems = await this.extractItemsFromCurrentPage(`${label}-retry`, pageOffset);
+      if (!retryItems || retryItems.length === 0) {
+        const postCheck = await this.detectBlocking(`${label}-post`);
+        if (postCheck) {
+          throw new ImdbBlockError(postCheck, { label, url, stage: 'post-extraction' });
+        }
+      } else {
+        return retryItems;
+      }
+    }
+
+    return items;
+  }
+
+  async detectBlocking(stage) {
+    try {
+      const url = this.page.url();
+      if (/register|signin|login/.test(url)) {
+        return `Redirected to sign-in (${url})`;
+      }
+
+      const bodySnapshot = await this.page.evaluate(() => {
+        const payload = {
+          title: document.title || '',
+          text: document.body ? document.body.innerText.slice(0, 5000) : ''
+        };
+        return payload;
+      });
+
+      if (bodySnapshot.title && /captcha|access denied|blocked/i.test(bodySnapshot.title)) {
+        return `Blocked by title indicator (${bodySnapshot.title})`;
+      }
+
+      if (bodySnapshot.text) {
+        const hit = BLOCK_PATTERNS.find(pattern => pattern.test(bodySnapshot.text));
+        if (hit) {
+          return `Blocked by body indicator (${hit})`;
         }
       }
 
-      return allItems;
+      const captchaDetected = await this.page.$('input[name="captcha"]') || await this.page.$('[id*="captcha"], [class*="captcha"]');
+      if (captchaDetected) {
+        return 'CAPTCHA detected on page';
+      }
 
+      return null;
     } catch (error) {
-      logger.error(`Failed to scrape watchlist for ${userId}:`, error);
-      throw error;
+      logger.warn('Block detection failed', { stage, error: error.message });
+      return null;
     }
   }
 
   async extractItemsFromCurrentPage(sortName, pageOffset = 0) {
-    logger.info(`Extracting items for ${sortName}...`);
+    logger.info('Extracting items from current page', { sortName, pageOffset });
 
     try {
-      // Enhanced scrolling for pagination
-      logger.info(`Scrolling ${sortName} page to load all items...`);
+      await this.page.evaluate(async () => {
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        let stableRounds = 0;
+        let previousCount = 0;
 
-      const finalCount = await this.page.evaluate(async () => {
-        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 30; i++) {
           window.scrollTo(0, document.body.scrollHeight);
-          await sleep(800);
-
-          const currentCount = Math.max(
+          await sleep(600 + Math.random() * 400);
+          const count = Math.max(
             document.querySelectorAll('.lister-item').length,
             document.querySelectorAll('.ipc-poster-card').length,
             document.querySelectorAll('a[href*="/title/"]').length
           );
 
-          if (i > 3 && currentCount > 0 && currentCount >= 200) {
+          if (count === previousCount) {
+            stableRounds += 1;
+          } else {
+            stableRounds = 0;
+          }
+
+          previousCount = count;
+
+          if (stableRounds >= 3 || count >= 300) {
             break;
           }
         }
 
         window.scrollTo(0, 0);
-        return document.querySelectorAll('a[href*="/title/"]').length;
+        await sleep(1000 + Math.random() * 500);
       });
-
-      logger.info(`${sortName}: Found ${finalCount} items after scrolling`);
-      await this.page.waitForTimeout(2000);
-
-    } catch (e) {
-      logger.warn(`${sortName}: Scroll loading failed:`, e);
+    } catch (error) {
+      logger.warn('Smooth scrolling failed', { sortName, error: error.message });
     }
 
-    // Extract watchlist items
-    return await this.page.evaluate((pageOffset) => {
-      const normalize = (arr) => arr.filter(item => item && item.imdbId && item.title).map((x, index) => {
-        const addedAt = new Date(Date.now() - (pageOffset + index) * 1000).toISOString();
-        return {
-          imdbId: x.imdbId,
-          title: (x.title || '').replace(/^\\d+\\.\\s*/, '').replace(/\\s+/g, ' ').trim(),
-          year: x.year,
-          type: x.type === 'tv' ? 'tv' : 'movie',
-          poster: x.poster || undefined,
-          imdbRating: x.imdbRating || 0,
-          numRatings: x.numRatings || 0,
-          runtime: x.runtime || 0,
-          popularity: x.popularity || 0,
-          userRating: x.userRating || 0,
-          addedAt,
-        };
-      });
+    const items = await this.page.evaluate((offset) => {
+      const normalize = (entry, index) => {
+        if (!entry || !entry.imdbId || !entry.title) {
+          return null;
+        }
 
-      // Extract from different DOM structures
-      const lister = Array.from(document.querySelectorAll('.lister-item')).map((el) => {
+        const addedAt = new Date(Date.now() - (offset + index) * 850).toISOString();
+
+        return {
+          imdbId: entry.imdbId,
+          title: entry.title,
+          year: entry.year || undefined,
+          type: entry.type === 'tv' ? 'tv' : 'movie',
+          poster: entry.poster || undefined,
+          imdbRating: entry.imdbRating || 0,
+          numRatings: entry.numRatings || 0,
+          runtime: entry.runtime || 0,
+          popularity: entry.popularity || 0,
+          userRating: entry.userRating || 0,
+          addedAt
+        };
+      };
+
+      const scrubText = (text = '') => text.replace(/\s+/g, ' ').trim();
+
+      const listerItems = Array.from(document.querySelectorAll('.lister-item')).map(el => {
         try {
-          const a = el.querySelector('h3 a[href*="/title/"]');
-          const href = a ? a.getAttribute('href') : '';
-          const id = href ? (href.match(/tt\\d+/) || [])[0] || '' : '';
-          const title = a ? (a.textContent || '').trim() : '';
-          const yearEl = el.querySelector('.lister-item-year, .secondaryInfo');
-          const yearText = yearEl ? yearEl.textContent || '' : '';
-          const year = (yearText.match(/(19|20)\\d{2}/) || [])[0];
+          const anchor = el.querySelector('h3 a[href*="/title/"]');
+          const href = anchor ? anchor.getAttribute('href') || '' : '';
+          const idMatch = href.match(/tt\d+/);
+          const title = scrubText(anchor ? anchor.textContent || '' : '');
+          const yearNode = el.querySelector('.lister-item-year, .secondaryInfo');
+          const yearText = scrubText(yearNode ? yearNode.textContent || '' : '');
+          const yearMatch = yearText.match(/(19|20)\d{2}/);
           const img = el.querySelector('img[src]');
           const text = (el.textContent || '').toLowerCase();
           const type = text.includes('tv series') || text.includes('mini series') || text.includes('series') ? 'tv' : 'movie';
+          const ratingNode = el.querySelector('.ratings-bar .inline-block strong');
+          const imdbRating = ratingNode ? parseFloat(scrubText(ratingNode.textContent || '0')) || 0 : 0;
 
-          const ratingEl = el.querySelector('.ratings-bar .inline-block strong');
-          const imdbRating = ratingEl ? parseFloat((ratingEl.textContent || '').trim() || '0') || 0 : 0;
+          if (!idMatch || !title) {
+            return null;
+          }
 
-          return id && title ? {
-            imdbId: id,
+          return {
+            imdbId: idMatch[0],
             title,
-            year,
+            year: yearMatch ? yearMatch[0] : undefined,
             type,
             poster: img ? img.src : undefined,
-            imdbRating,
-            numRatings: 0,
-            runtime: 0,
-            popularity: 0,
-            userRating: 0,
-          } : null;
-        } catch (e) {
+            imdbRating
+          };
+        } catch (error) {
           return null;
         }
-      });
+      }).filter(Boolean);
 
-      // Fallback: extract from all title links
-      const links = Array.from(document.querySelectorAll('a[href*="/title/"]')).map((a) => {
-        let id = '';
-        if (a.href) {
-          const match = a.href.match(/\\/title\\/(tt\\d+)/) || a.href.match(/(tt\\d+)/);
-          id = match ? match[1] : '';
+      const linkItems = Array.from(document.querySelectorAll('a[href*="/title/"]')).map(anchor => {
+        const href = anchor.getAttribute('href') || anchor.href || '';
+        const idMatch = href.match(/tt\d+/);
+        const title = scrubText(anchor.textContent || '');
+        if (!idMatch || title.length < 2) {
+          return null;
         }
 
-        let title = (a.textContent || '').trim();
-        title = title.replace(/^\\d+\\.\\s*/, '').replace(/\\s+/g, ' ').trim();
-
-        if (!id || !title || title.length < 3) return null;
-
-        const parent = a.closest('li, .titleColumn, .cli-item, [class*="item"]');
-        let year = null;
-        if (parent) {
-          const parentText = parent.textContent || '';
-          const yearMatch = parentText.match(/\\(?(19|20)\\d{2}\\)?/);
-          year = yearMatch ? yearMatch[0].replace(/[()]/g, '') : null;
-        }
-
-        const contextText = parent ? (parent.textContent || '').toLowerCase() : '';
-        const type = contextText.includes('series') || contextText.includes('tv') ? 'tv' : 'movie';
+        const container = anchor.closest('li, .titleColumn, .cli-item, [class*="item"]');
+        const containerText = container ? (container.textContent || '').toLowerCase() : '';
+        const yearMatch = container ? (container.textContent || '').match(/(19|20)\d{2}/) : null;
 
         return {
-          imdbId: id,
+          imdbId: idMatch[0],
           title,
-          year,
-          type,
-          poster: undefined,
-          imdbRating: 0,
-          numRatings: 0,
-          runtime: 0,
-          popularity: 0,
-          userRating: 0,
+          year: yearMatch ? yearMatch[0] : undefined,
+          type: containerText.includes('series') || containerText.includes('tv') ? 'tv' : 'movie'
         };
       }).filter(Boolean);
 
-      // Remove duplicates
-      const uniqueLinks = links.reduce((acc, current) => {
-        if (current && !acc.find(item => item.imdbId === current.imdbId)) {
-          acc.push(current);
+      const uniqueLinks = [];
+      const linkSeen = new Set();
+      for (const entry of linkItems) {
+        if (!linkSeen.has(entry.imdbId)) {
+          linkSeen.add(entry.imdbId);
+          uniqueLinks.push(entry);
         }
-        return acc;
-      }, []);
-
-      // Choose the method that gives us the most items
-      const normalizedLister = normalize(lister);
-      const normalizedLinks = normalize(uniqueLinks);
-
-      let chosen = normalizedLister;
-      if (normalizedLinks.length > chosen.length) {
-        chosen = normalizedLinks;
       }
 
-      return chosen;
+      const bestSource = listerItems.length >= uniqueLinks.length ? listerItems : uniqueLinks;
+      const normalized = bestSource
+        .map((entry, index) => normalize(entry, index))
+        .filter(Boolean);
+
+      return normalized;
     }, pageOffset);
+
+    return items || [];
+  }
+
+  async enhanceWithTmdb(items) {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    try {
+      const contentTypes = await tmdbService.detectContentTypeBatch(
+        items.map(item => ({ title: item.title, year: item.year }))
+      );
+
+      const posters = await tmdbService.getPosterBatch(
+        items.map(item => ({ title: item.title, year: item.year }))
+      );
+
+      items.forEach(item => {
+        const key = `${item.title}_${item.year || 'unknown'}`;
+        if (contentTypes.has(key)) {
+          item.type = contentTypes.get(key);
+        }
+        if (posters.has(key) && !item.poster) {
+          item.poster = posters.get(key);
+        }
+      });
+
+      const posterCount = items.filter(item => item.poster).length;
+      logger.info('TMDB enhancement applied', {
+        total: items.length,
+        posters: posterCount
+      });
+
+    } catch (error) {
+      logger.warn('TMDB enhancement failed', { error: error.message });
+    }
+  }
+
+  async captureDiagnostics(stage, error) {
+    if (!this.debugDir) {
+      return;
+    }
+
+    try {
+      await fs.mkdir(this.debugDir, { recursive: true });
+      const timestamp = Date.now();
+      const baseName = `${stage}-${timestamp}`.replace(/[^a-z0-9_-]/gi, '_');
+
+      if (this.page) {
+        const screenshotPath = path.join(this.debugDir, `${baseName}.png`);
+        const htmlPath = path.join(this.debugDir, `${baseName}.html`);
+
+        await this.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+        const html = await this.page.content();
+        await fs.writeFile(htmlPath, html, 'utf-8');
+      }
+
+      const metaPath = path.join(this.debugDir, `${baseName}.json`);
+      const meta = {
+        stage,
+        error: error ? error.message : null,
+        code: error ? error.code : null,
+        url: this.page ? this.page.url() : null,
+        profile: this.currentProfile ? {
+          proxy: this.currentProfile.proxy ? this.currentProfile.proxy.mask : 'direct',
+          timezone: this.currentProfile.timezone,
+          locale: this.currentProfile.locale,
+          sortOrder: this.currentProfile.sortOrder
+        } : null
+      };
+      await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+
+    } catch (captureError) {
+      logger.warn('Failed to capture diagnostics', { error: captureError.message });
+    }
   }
 
   async cleanup() {
     try {
       if (this.page) {
-        await this.page.close();
+        await this.page.close().catch(() => {});
         this.page = null;
       }
+      if (this.context) {
+        await this.context.close().catch(() => {});
+        this.context = null;
+      }
       if (this.browser) {
-        await this.browser.close();
+        await this.browser.close().catch(() => {});
         this.browser = null;
       }
-      logger.info('✅ Browser cleanup completed');
     } catch (error) {
-      logger.error('❌ Error during browser cleanup:', error);
+      logger.error('Error during browser cleanup', { error: error.message });
     }
   }
 }
