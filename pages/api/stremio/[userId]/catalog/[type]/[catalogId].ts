@@ -59,13 +59,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (workerError) {
         console.warn(`[Catalog] VPS worker failed for ${userId}:`, workerError);
 
-        // In production, return empty array rather than fallback
-        if (isProduction) {
-          watchlistItems = [];
-        } else {
-          // In development, fallback to direct scraping
-          console.log('[Catalog] Falling back to direct scraping in development');
+        // Enable fallback in production when VPS worker fails
+        console.log('[Catalog] VPS worker failed, falling back to direct breakthrough extraction');
+        try {
           watchlistItems = await fetchWatchlist(userId, { forceRefresh: force });
+          console.log(`[Catalog] Fallback extraction successful: ${watchlistItems.length} items`);
+        } catch (fallbackError) {
+          console.error('[Catalog] Fallback extraction also failed:', fallbackError);
+          watchlistItems = [];
         }
       }
     } else {

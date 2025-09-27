@@ -48,7 +48,10 @@
       "mcp__vercel__get_deployment",
       "Bash(echo:*)",
       "Bash(cat:*)",
-      "Read(//Users/at/Downloads/**)"
+      "Read(//Users/at/Downloads/**)",
+      "WebFetch(domain:imdbto-stremio.vercel.app)",
+      "WebFetch(domain:imdb-migrator-kupuwb4tv-atgs-projects-577e9691.vercel.app)",
+      "WebFetch(domain:imdb-migrator.vercel.app)"
     ],
     "deny": [],
     "ask": []
