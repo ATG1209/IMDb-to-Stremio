@@ -73,7 +73,7 @@ export default function SimpleDashboard() {
     try {
       await navigator.clipboard.writeText(text);
       setSuccess('¡URL copiada al portapapeles!');
-    } catch (_err) {
+    } catch {
       setError('No se pudo copiar al portapapeles');
     }
   };

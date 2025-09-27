@@ -3,7 +3,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { ADDON_VERSION } from '../lib/version';
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
+  // const [user, setUser] = useState(null); // Unused until authentication is implemented
   const [watchlist, setWatchlist] = useState(null);
   const [config, setConfig] = useState(null);
   const [sortBy, setSortBy] = useState('dateAdded');

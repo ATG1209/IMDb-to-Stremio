@@ -7,7 +7,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId, type, catalogId, sortOption, nocache, refresh } = req.query;
+  const { userId, type, catalogId, nocache, refresh } = req.query;
 
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({ error: 'Missing userId parameter' });
