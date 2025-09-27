@@ -40,7 +40,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Try VPS worker first, fallback to direct scraping in development
     const useWorker = process.env.WORKER_URL;
 
-    if (useWorker) {
+    // TEMPORARY: Test mode for debugging IMDb blocking issues
+    const testMode = req.query.test === '1';
+
+    if (testMode) {
+      console.log('[Catalog] Using test data mode to verify addon functionality');
+      watchlistItems = [
+        {
+          imdbId: 'tt0111161',
+          title: 'The Shawshank Redemption',
+          year: '1994',
+          type: 'movie',
+          poster: 'https://image.tmdb.org/t/p/w500/q6y0Go1tsGEsmtFryDOJo3dEmqu.jpg',
+          imdbRating: 9.3,
+          numRatings: 2500000,
+          runtime: 142,
+          popularity: 85.4,
+          userRating: 0,
+          addedAt: new Date().toISOString()
+        },
+        {
+          imdbId: 'tt0068646',
+          title: 'The Godfather',
+          year: '1972',
+          type: 'movie',
+          poster: 'https://image.tmdb.org/t/p/w500/3bhkrj58Vtu7enYsRolD1fZdja1.jpg',
+          imdbRating: 9.2,
+          numRatings: 1700000,
+          runtime: 175,
+          popularity: 92.1,
+          userRating: 0,
+          addedAt: new Date().toISOString()
+        },
+        {
+          imdbId: 'tt0468569',
+          title: 'The Dark Knight',
+          year: '2008',
+          type: 'movie',
+          poster: 'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
+          imdbRating: 9.0,
+          numRatings: 2300000,
+          runtime: 152,
+          popularity: 88.7,
+          userRating: 0,
+          addedAt: new Date().toISOString()
+        }
+      ];
+    } else if (useWorker) {
       try {
         // Check worker health first
         const isWorkerHealthy = await vpsWorkerClient.isHealthy();
