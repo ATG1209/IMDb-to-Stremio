@@ -64,7 +64,7 @@ class VPSWorkerClient {
           imdbUserId,
           forceRefresh: options.forceRefresh || false
         }),
-        timeout: 15000 // 15 seconds timeout to trigger fallback faster
+        timeout: 90000 // 90 seconds timeout for 411-item enhanced extraction
       });
 
       if (!response.ok) {
