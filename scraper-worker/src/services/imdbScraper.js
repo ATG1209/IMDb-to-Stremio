@@ -285,6 +285,7 @@ export class ImdbScraper {
         }
       };
 
+      // Basic navigator overrides
       override('webdriver', undefined);
       override('languages', fingerprint.languages);
       override('platform', fingerprint.platform);
@@ -292,6 +293,80 @@ export class ImdbScraper {
       override('deviceMemory', fingerprint.deviceMemory);
       override('maxTouchPoints', fingerprint.maxTouchPoints);
 
+      // Enhanced stealth: Remove automation indicators
+      delete window.navigator.__proto__.webdriver;
+      delete window.navigator.webdriver;
+
+      // Override chrome runtime detection
+      window.chrome = {
+        runtime: {
+          onConnect: undefined,
+          onMessage: undefined
+        }
+      };
+
+      // Canvas fingerprinting randomization
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attributes) {
+        if (type === '2d') {
+          const context = getContext.call(this, type, attributes);
+          const imageData = context.getImageData;
+          context.getImageData = function(...args) {
+            const result = imageData.apply(this, args);
+            // Add minimal noise to canvas fingerprint
+            for (let i = 0; i < result.data.length; i += 4) {
+              if (Math.random() < 0.001) {
+                result.data[i] = (result.data[i] + Math.floor(Math.random() * 3) - 1) % 256;
+              }
+            }
+            return result;
+          };
+          return context;
+        }
+        return getContext.call(this, type, attributes);
+      };
+
+      // WebGL fingerprinting randomization
+      const getParameter = WebGLRenderingContext.prototype.getParameter;
+      WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        // Randomize WebGL vendor and renderer
+        if (parameter === 37445) {
+          return fingerprint.webglVendor || 'Intel Inc.';
+        }
+        if (parameter === 37446) {
+          return fingerprint.webglRenderer || 'Intel Iris OpenGL Engine';
+        }
+        return getParameter.call(this, parameter);
+      };
+
+      // Screen and timing fingerprinting
+      Object.defineProperty(screen, 'availWidth', {
+        get: () => fingerprint.screenWidth || 1920
+      });
+      Object.defineProperty(screen, 'availHeight', {
+        get: () => fingerprint.screenHeight || 1080
+      });
+      Object.defineProperty(screen, 'colorDepth', {
+        get: () => fingerprint.colorDepth || 24
+      });
+
+      // Performance timing randomization
+      const originalNow = performance.now;
+      performance.now = function() {
+        return originalNow.call(this) + Math.random() * 0.1;
+      };
+
+      // Remove playwright indicators
+      delete window.__playwright;
+      delete window._playwright;
+      delete window.playwright;
+
+      // Plugin array spoofing
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => fingerprint.plugins || []
+      });
+
+      // Permissions API
       const originalPermissions = window.navigator.permissions && window.navigator.permissions.query;
       if (originalPermissions) {
         window.navigator.permissions.query = parameters => (
@@ -306,7 +381,13 @@ export class ImdbScraper {
         platform: profile.platform,
         hardwareConcurrency: profile.hardwareConcurrency,
         deviceMemory: profile.deviceMemory,
-        maxTouchPoints: profile.maxTouchPoints
+        maxTouchPoints: profile.maxTouchPoints,
+        webglVendor: profile.webglVendor,
+        webglRenderer: profile.webglRenderer,
+        screenWidth: profile.viewport.width,
+        screenHeight: profile.viewport.height,
+        colorDepth: profile.colorDepth,
+        plugins: profile.plugins
       }
     });
 
@@ -335,6 +416,29 @@ export class ImdbScraper {
     const deviceMemory = randomChoice([4, 8, 16]);
     const maxTouchPoints = userAgent.includes('Mobile') || userAgent.includes('iPhone') ? randomChoice([2, 3, 5]) : 0;
 
+    // Enhanced fingerprinting properties
+    const webglVendors = ['Intel Inc.', 'AMD', 'NVIDIA Corporation', 'Microsoft Corporation'];
+    const webglRenderers = [
+      'Intel Iris OpenGL Engine',
+      'Intel(R) UHD Graphics 630',
+      'AMD Radeon Pro 555 OpenGL Engine',
+      'NVIDIA GeForce GTX 1060',
+      'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0)'
+    ];
+    const webglVendor = randomChoice(webglVendors);
+    const webglRenderer = randomChoice(webglRenderers);
+    const colorDepth = randomChoice([24, 32]);
+
+    // Basic plugin simulation
+    const plugins = platform.includes('Mac') ? [
+      { name: 'PDF Viewer', description: 'PDF Viewer' },
+      { name: 'Chrome PDF Viewer', description: 'Portable Document Format' }
+    ] : [
+      { name: 'PDF Viewer', description: 'PDF Viewer' },
+      { name: 'Chrome PDF Plugin', description: 'Portable Document Format' },
+      { name: 'Native Client', description: 'Native Client' }
+    ];
+
     const proxy = this.selectProxy(attempt);
     const sessionKey = proxy ? `proxy-${proxy.id}` : 'direct';
 
@@ -356,6 +460,10 @@ export class ImdbScraper {
       hardwareConcurrency,
       deviceMemory,
       maxTouchPoints,
+      webglVendor,
+      webglRenderer,
+      colorDepth,
+      plugins,
       proxy,
       sessionKey,
       viewSequence,
