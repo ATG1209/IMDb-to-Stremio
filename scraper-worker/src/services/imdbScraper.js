@@ -264,7 +264,16 @@ export class ImdbScraper {
       userAgent: profile.userAgent,
       locale: profile.locale,
       timezoneId: profile.timezone,
-      extraHTTPHeaders: DEFAULT_HEADERS
+      extraHTTPHeaders: {
+        ...DEFAULT_HEADERS,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-User': '?1',
+        'Sec-Fetch-Dest': 'document'
+      }
     };
 
     if (storageState) {
@@ -640,6 +649,9 @@ export class ImdbScraper {
     const label = `page-${pageNumber}-${view}`;
 
     logger.info('Navigating to watchlist page', { url, label, attempt });
+
+    // Add small random delay to appear more human
+    await new Promise(resolve => setTimeout(resolve, Math.random() * 1000 + 500));
 
     const response = await this.page.goto(url, {
       waitUntil: 'domcontentloaded',
