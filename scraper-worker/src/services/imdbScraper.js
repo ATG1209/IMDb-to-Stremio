@@ -586,9 +586,8 @@ export class ImdbScraper {
       const pageOneItems = await this.extractPage({ userId, pageNumber: 1, view, attempt });
       this.mergeItems(allItems, seenIds, pageOneItems);
 
-      if (allItems.length >= 250) {
-        break;
-      }
+      // PAGINATION FIX: Removed 250-item limit to enable page 2 extraction
+      // Previously: if (allItems.length >= 250) { break; }
 
       const pageTwoItems = await this.extractPage({ userId, pageNumber: 2, view, attempt });
       this.mergeItems(allItems, seenIds, pageTwoItems);
