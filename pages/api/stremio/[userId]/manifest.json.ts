@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { ADDON_VERSION } from '../../../../lib/version';
-// Force recompilation
+// Force recompilation 2.7.1
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
