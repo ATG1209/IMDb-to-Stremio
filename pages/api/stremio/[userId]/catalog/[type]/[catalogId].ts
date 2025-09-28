@@ -37,8 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     let watchlistItems: WorkerWatchlistItem[] = [];
 
-    // Try VPS worker first, fallback to direct scraping in development
-    const useWorker = process.env.WORKER_URL;
+    // TEMPORARY: Disable VPS worker to force fallback extraction
+    const useWorker = false; // process.env.WORKER_URL;
 
     // TEMPORARY: Test mode for debugging IMDb blocking issues
     const testMode = req.query.test === '1';
