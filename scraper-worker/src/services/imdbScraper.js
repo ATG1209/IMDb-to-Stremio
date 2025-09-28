@@ -583,16 +583,23 @@ export class ImdbScraper {
     const seenIds = new Set();
 
     for (const view of this.currentProfile.viewSequence) {
+      logger.info(`Starting extraction for ${view} view`);
+
       const pageOneItems = await this.extractPage({ userId, pageNumber: 1, view, attempt });
+      logger.info(`Page 1 (${view}): Found ${pageOneItems.length} items`);
       this.mergeItems(allItems, seenIds, pageOneItems);
 
       // PAGINATION FIX: Removed 250-item limit to enable page 2 extraction
       // Previously: if (allItems.length >= 250) { break; }
 
       const pageTwoItems = await this.extractPage({ userId, pageNumber: 2, view, attempt });
+      logger.info(`Page 2 (${view}): Found ${pageTwoItems.length} items`);
       this.mergeItems(allItems, seenIds, pageTwoItems);
 
+      logger.info(`Total after ${view}: ${allItems.length} unique items`);
+
       if (allItems.length > 0) {
+        logger.info(`Breaking early - found ${allItems.length} items with ${view} view`);
         break;
       }
     }
