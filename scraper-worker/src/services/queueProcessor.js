@@ -1,5 +1,6 @@
 import { jobQueue } from './jobQueue.js';
 import { jobStorage } from './jobStorage.js';
+import { redisClient } from './redis.js';
 import { ImdbScraper } from './imdbScraper.js';
 import { logger } from '../utils/logger.js';
 
@@ -99,6 +100,18 @@ class QueueProcessor {
 
       // Store result separately for faster access
       await jobStorage.saveResult(job.id, result);
+
+      // Save to watchlist cache for direct access by production app
+      await redisClient.setEx(
+        `watchlist:${job.imdbUserId}`,
+        30 * 24 * 60 * 60, // 30 days
+        JSON.stringify(watchlistItems)
+      );
+
+      logger.info(`Watchlist cached for user ${job.imdbUserId}`, {
+        itemCount: watchlistItems.length,
+        cacheKey: `watchlist:${job.imdbUserId}`
+      });
 
       // Update progress
       await jobStorage.updateJob(job.id, {
