@@ -28,12 +28,21 @@ class VPSWorkerClient {
 
   // Check if worker is available
   async isHealthy(): Promise<boolean> {
-    // FORCE FALLBACK: Always return false to use local extraction
-    console.log('[VPSWorker] Forcing fallback to local extraction');
-    return false;
+    try {
+      const response = await fetch(`${this.baseUrl}/health`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
+        },
+        timeout: 5000
+      });
+      return response.ok;
+    } catch (error) {
+      console.warn('[VPSWorker] Health check failed:', error);
+      return false;
+    }
   }
 
-  // Request scraping job from VPS worker
+  // Smart cache-first approach
   async scrapeWatchlist(imdbUserId: string, options: {
     forceRefresh?: boolean;
   } = {}): Promise<WorkerWatchlistItem[]> {
@@ -43,9 +52,34 @@ class VPSWorkerClient {
     }
 
     try {
-      console.log(`[VPSWorker] Requesting scrape for user ${imdbUserId}...`);
+      // Step 1: Try cache first (unless force refresh)
+      if (!options.forceRefresh) {
+        console.log(`[VPSWorker] Checking cache for user ${imdbUserId}...`);
 
-      const response = await fetch(`${this.baseUrl}/jobs`, {
+        try {
+          const cacheResponse = await fetch(`${this.baseUrl}/cache/${imdbUserId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
+            },
+            timeout: 5000
+          });
+
+          if (cacheResponse.ok) {
+            const cacheResult = await cacheResponse.json();
+            if (cacheResult.success && cacheResult.data && cacheResult.data.length > 0) {
+              console.log(`[VPSWorker] Cache hit! Found ${cacheResult.data.length} items`);
+              return cacheResult.data;
+            }
+          }
+        } catch (cacheError) {
+          console.warn('[VPSWorker] Cache lookup failed, will trigger fresh scrape');
+        }
+      }
+
+      // Step 2: Trigger async job and return immediately with error (triggers fallback)
+      console.log(`[VPSWorker] Triggering async scrape job for user ${imdbUserId}...`);
+
+      const jobResponse = await fetch(`${this.baseUrl}/jobs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,26 +89,20 @@ class VPSWorkerClient {
           imdbUserId,
           forceRefresh: options.forceRefresh || false
         }),
-        timeout: 90000 // 90 seconds timeout for 411-item enhanced extraction
+        timeout: 10000
       });
 
-      if (!response.ok) {
-        throw new Error(`VPS Worker error: ${response.status} ${response.statusText}`);
+      if (jobResponse.ok) {
+        const jobResult = await jobResponse.json();
+        console.log(`[VPSWorker] Job queued: ${jobResult.jobId}. Data will be available in cache after completion.`);
       }
 
-      const result = await response.json();
-
-      if (result.success && result.data && result.data.length > 0) {
-        console.log(`[VPSWorker] Successfully scraped ${result.data.length} items`);
-        return result.data;
-      } else {
-        console.warn('[VPSWorker] No data returned or empty result:', result);
-        // CRITICAL FIX: Throw error to trigger fallback when VPS worker returns 0 items
-        throw new Error(`VPS Worker returned no items: ${result.message || 'Empty result'}`);
-      }
+      // Always throw error to trigger fallback for immediate response
+      // The job runs in background and populates cache for next request
+      throw new Error('VPS Worker: Async job triggered, use fallback for immediate response');
 
     } catch (error) {
-      console.error(`[VPSWorker] Failed to scrape watchlist for ${imdbUserId}:`, error);
+      console.error(`[VPSWorker] Failed to get data for ${imdbUserId}:`, error);
       throw error;
     }
   }

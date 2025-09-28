@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { jobsRouter } from './routes/jobs.js';
 import { healthRouter } from './routes/health.js';
+import { cacheRouter } from './routes/cache.js';
+import { scrapeSyncRouter } from './routes/scrapeSync.js';
 import { queueProcessor } from './services/queueProcessor.js';
 import { logger } from './utils/logger.js';
 
@@ -29,6 +31,8 @@ app.use((req, res, next) => {
 // Routes
 app.use('/health', healthRouter);
 app.use('/jobs', jobsRouter);
+app.use('/cache', cacheRouter);
+app.use('/scrape-sync', scrapeSyncRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
