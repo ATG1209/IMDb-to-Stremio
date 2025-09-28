@@ -99,6 +99,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (isProduction) {
             console.log(`[Catalog] Using VPS worker: ${watchlistItems.length} items`);
           }
+
+          // Treat 0 items as VPS worker failure to trigger fallback
+          if (watchlistItems.length === 0) {
+            throw new Error('VPS worker returned 0 items - likely blocked or access denied');
+          }
         } else {
           throw new Error('VPS worker is not healthy');
         }
