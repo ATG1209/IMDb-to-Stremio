@@ -30,6 +30,9 @@ class VPSWorkerClient {
   async isHealthy(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
+        },
         timeout: 5000
       });
       return response.ok;
@@ -54,7 +57,8 @@ class VPSWorkerClient {
       const response = await fetch(`${this.baseUrl}/jobs`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
         },
         body: JSON.stringify({
           imdbUserId,
