@@ -127,9 +127,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return true;
     });
 
-    // CRITICAL FIX: Reverse array to get newest-first order (matches Stremlist behavior)
-    const sortedItems = [...filteredItems].reverse();
-    console.log(`[Catalog] Applied .reverse() for newest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
+    // User requested oldest-first order (opposite of previous newest-first)
+    const sortedItems = [...filteredItems]; // No reverse = oldest-first order
+    console.log(`[Catalog] Using oldest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
     // Convert to Stremio catalog format
     const metas = sortedItems.map(item => {

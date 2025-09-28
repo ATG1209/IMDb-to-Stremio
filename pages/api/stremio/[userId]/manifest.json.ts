@@ -34,16 +34,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     types: ['movie', 'series'],
     idPrefixes: ['tt'],
 
-    // Simple catalog - no sorting options, fixed newest-first order
+    // Simple catalog - no sorting options, fixed oldest-first order
     catalogs: [
       {
         id: `imdb-movies-${userId}`,
-        name: 'IMDb Movies (Newest First)',
+        name: 'IMDb Movies (Oldest First)',
         type: 'movie'
       },
       {
         id: `imdb-series-${userId}`,
-        name: 'IMDb Series (Newest First)',
+        name: 'IMDb Series (Oldest First)',
         type: 'series'
       }
     ],

@@ -399,9 +399,10 @@ export class ImdbScraper {
   buildStealthProfile(attempt) {
     const userAgent = randomChoice(USER_AGENT_POOL);
     const viewport = randomChoice(VIEWPORTS) || { width: 1920, height: 1080 };
-    const languages = randomChoice(LANGUAGE_PROFILES) || ['en-US', 'en'];
+    // FORCE ENGLISH: Always use English locale to prevent French titles
+    const languages = ['en-US', 'en']; // Force English instead of random choice
     const timezone = randomChoice(TIMEZONES) || 'America/New_York';
-    const locale = languages[0] || 'en-US';
+    const locale = 'en-US'; // Force en-US locale
 
     let platform = 'Win32';
     if (userAgent.includes('Macintosh') || userAgent.includes('iPhone') || userAgent.includes('iPad')) {
@@ -630,6 +631,7 @@ export class ImdbScraper {
     const params = new URLSearchParams();
     params.set('sort', this.currentProfile.sortOrder);
     params.set('view', view);
+    params.set('ref_', 'watchlist&language=en-US'); // Force English language
     if (pageNumber > 1) {
       params.set('page', String(pageNumber));
     }
