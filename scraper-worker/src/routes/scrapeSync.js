@@ -1,6 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
-import { imdbScraper } from '../services/imdbScraper.js';
+import { ImdbScraper } from '../services/imdbScraper.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -21,7 +21,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Directly scrape without queue - wait for completion
     const startTime = Date.now();
-    const items = await imdbScraper.scrapeWatchlist(imdbUserId, { forceRefresh });
+    const scraper = new ImdbScraper();
+    const items = await scraper.scrapeWatchlist(imdbUserId, { forceRefresh });
     const duration = Date.now() - startTime;
 
     logger.info('Synchronous scrape completed', {

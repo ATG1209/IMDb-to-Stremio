@@ -117,6 +117,44 @@ The project is currently in early development (M0 milestone). Core CSV parsing i
 - **Debugging**: Check browser console logs in `page.evaluate()` context
 - **Performance**: Balance speed vs completeness based on user needs
 
+## VPS Worker Architecture
+
+**IMPORTANT**: This local repository is mirrored by a VPS worker running at `37.27.92.76:3003`.
+
+### **How VPS Integration Works**
+- **Local Development**: Code changes are made in this repository (`/Users/at/Development/IMDb/scraper-worker/`)
+- **VPS Deployment**: The VPS mirrors this GitHub repository automatically
+- **Deployment Process**:
+  1. Push changes to GitHub: `git push origin main`
+  2. VPS pulls changes: `git pull origin main` (on VPS)
+  3. Restart VPS worker service to apply changes
+
+### **VPS Worker Details**
+- **Location**: Remote VPS at `37.27.92.76`
+- **Port**: `3003`
+- **Endpoints**:
+  - Jobs: `http://37.27.92.76:3003/jobs`
+  - Cache: `http://37.27.92.76:3003/cache/{userId}`
+  - Health: `http://37.27.92.76:3003/health`
+- **Authentication**: Bearer token `worker-secret`
+
+### **Testing Changes on VPS**
+```bash
+# After pushing changes to GitHub:
+# 1. SSH to VPS and pull changes
+git pull origin main
+npm restart
+
+# 2. Test VPS worker
+curl -X POST http://37.27.92.76:3003/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"imdbUserId": "ur31595220", "forceRefresh": true}'
+
+# 3. Verify cache
+curl -H "Authorization: Bearer worker-secret" \
+  http://37.27.92.76:3003/cache/ur31595220
+```
+
 ## Claude Code Workflow
 
 **ALWAYS provide manifest URLs after making changes:**
