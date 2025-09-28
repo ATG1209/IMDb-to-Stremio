@@ -28,18 +28,9 @@ class VPSWorkerClient {
 
   // Check if worker is available
   async isHealthy(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/health`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
-        },
-        timeout: 5000
-      });
-      return response.ok;
-    } catch (error) {
-      console.warn('[VPSWorker] Health check failed:', error);
-      return false;
-    }
+    // FORCE FALLBACK: Always return false to use local extraction
+    console.log('[VPSWorker] Forcing fallback to local extraction');
+    return false;
   }
 
   // Request scraping job from VPS worker
