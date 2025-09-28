@@ -51,7 +51,8 @@
       "Read(//Users/at/Downloads/**)",
       "WebFetch(domain:imdbto-stremio.vercel.app)",
       "WebFetch(domain:imdb-migrator-kupuwb4tv-atgs-projects-577e9691.vercel.app)",
-      "WebFetch(domain:imdb-migrator.vercel.app)"
+      "WebFetch(domain:imdb-migrator.vercel.app)",
+      "Bash(git pull:*)"
     ],
     "deny": [],
     "ask": []
