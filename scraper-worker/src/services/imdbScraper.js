@@ -24,7 +24,30 @@ const DEFAULT_LAUNCH_ARGS = [
   '--disable-background-timer-throttling',
   '--disable-backgrounding-occluded-windows',
   '--disable-renderer-backgrounding',
-  '--window-size=1920,1080'
+  '--window-size=1920,1080',
+  // AGGRESSIVE ANTI-DETECTION MEASURES
+  '--disable-blink-features=AutomationControlled',
+  '--exclude-switches=enable-automation',
+  '--disable-extensions-file-access-check',
+  '--disable-extensions-http-throttling',
+  '--aggressive-cache-discard',
+  '--disable-ipc-flooding-protection',
+  '--disable-popup-blocking',
+  '--disable-prompt-on-repost',
+  '--disable-hang-monitor',
+  '--disable-client-side-phishing-detection',
+  '--disable-component-update',
+  '--disable-default-apps',
+  '--disable-domain-reliability',
+  '--disable-features=TranslateUI',
+  '--disable-web-security',
+  '--allow-running-insecure-content',
+  '--disable-notifications',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-sync',
+  '--metrics-recording-only',
+  '--disable-field-trial-config'
 ];
 
 const DEFAULT_HEADERS = {
@@ -313,6 +336,34 @@ export class ImdbScraper {
           onMessage: undefined
         }
       };
+
+      // AGGRESSIVE ANTI-DETECTION: Hide automation traces
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+          return [
+            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
+            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
+            { name: 'Native Client', filename: 'internal-nacl-plugin' }
+          ];
+        }
+      });
+
+      // Hide webdriver property more aggressively
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      Object.defineProperty(window, 'webdriver', { get: () => undefined });
+
+      // Spoof permissions
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+          Promise.resolve({ state: Cypress ? 'denied' : 'granted' }) :
+          originalQuery(parameters)
+      );
+
+      // Remove automation indicators
+      ['__driver_evaluate', '__webdriver_evaluate', '__selenium_evaluate', '__fxdriver_evaluate'].forEach(prop => {
+        delete window[prop];
+      });
 
       // Canvas fingerprinting randomization
       const getContext = HTMLCanvasElement.prototype.getContext;
