@@ -1,6 +1,5 @@
 import { logger } from '../utils/logger.js';
 
-const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
@@ -8,11 +7,29 @@ const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 const tmdbCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
+let missingKeyLogged = false;
+
+function getTmdbApiKey() {
+  const apiKey = process.env.TMDB_API_KEY?.trim();
+
+  if (!apiKey) {
+    if (!missingKeyLogged) {
+      logger.warn('TMDB_API_KEY not configured, skipping TMDB enhancement');
+      missingKeyLogged = true;
+    }
+    return null;
+  }
+
+  missingKeyLogged = false;
+  return apiKey;
+}
+
 export const tmdbService = {
   // Search for a movie/TV show on TMDB
   async searchContent(title, year, type = 'multi') {
-    if (!TMDB_API_KEY) {
-      logger.warn('TMDB_API_KEY not configured, skipping TMDB enhancement');
+    const apiKey = getTmdbApiKey();
+
+    if (!apiKey) {
       return null;
     }
 
@@ -26,7 +43,7 @@ export const tmdbService = {
 
     try {
       const params = new URLSearchParams({
-        api_key: TMDB_API_KEY,
+        api_key: apiKey,
         query: title,
         ...(year && { year: year }),
         language: 'en-US'
@@ -107,8 +124,7 @@ export const tmdbService = {
   async getPosterBatch(items) {
     const posterMap = new Map();
 
-    if (!TMDB_API_KEY) {
-      logger.warn('TMDB_API_KEY not configured, skipping poster batch');
+    if (!getTmdbApiKey()) {
       return posterMap;
     }
 
@@ -183,8 +199,7 @@ export const tmdbService = {
   async detectContentTypeBatch(items) {
     const typeMap = new Map();
 
-    if (!TMDB_API_KEY) {
-      logger.warn('TMDB_API_KEY not configured, skipping content type detection');
+    if (!getTmdbApiKey()) {
       return typeMap;
     }
 
