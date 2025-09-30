@@ -923,16 +923,24 @@ export class ImdbScraper {
     }
 
     try {
+      // Clean titles by removing IMDb numbering prefix (e.g., "410. Black Book" -> "Black Book")
+      const cleanTitle = (title) => {
+        if (!title) return title;
+        // Remove numbering like "410. " or "1. " from the start
+        return title.replace(/^\d+\.\s*/, '').trim();
+      };
+
       const contentTypes = await tmdbService.detectContentTypeBatch(
-        items.map(item => ({ title: item.title, year: item.year }))
+        items.map(item => ({ title: cleanTitle(item.title), year: item.year }))
       );
 
       const posters = await tmdbService.getPosterBatch(
-        items.map(item => ({ title: item.title, year: item.year }))
+        items.map(item => ({ title: cleanTitle(item.title), year: item.year }))
       );
 
       items.forEach(item => {
-        const key = `${item.title}_${item.year || 'unknown'}`;
+        const cleanedTitle = cleanTitle(item.title);
+        const key = `${cleanedTitle}_${item.year || 'unknown'}`;
         if (contentTypes.has(key)) {
           item.type = contentTypes.get(key);
         }
