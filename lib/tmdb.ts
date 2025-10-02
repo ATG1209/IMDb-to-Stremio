@@ -64,22 +64,48 @@ export async function detectContentType(title: string, year?: string): Promise<'
       rateLimitedFetch(tvUrl)
     ]);
 
-    if (movieResponse.ok && tvResponse.ok) {
-      const [movieData, tvData] = await Promise.all([
-        movieResponse.json(),
-        tvResponse.json()
-      ]);
+    let movieData: TMDBSearchResponse | null = null;
+    let tvData: TMDBSearchResponse | null = null;
 
-      // If we find results in both, prefer the one with higher popularity
-      const topMovie = movieData.results?.[0];
-      const topTvShow = tvData.results?.[0];
+    if (movieResponse.ok) {
+      movieData = await movieResponse.json();
+    } else {
+      const message = await movieResponse.text().catch(() => '');
+      console.warn(
+        `[TMDB] Movie search failed for "${title}" (${movieResponse.status}): ${message.slice(0, 120)}`
+      );
+    }
 
-      if (topTvShow && (!topMovie || topTvShow.popularity > topMovie.popularity)) {
+    if (tvResponse.ok) {
+      tvData = await tvResponse.json();
+    } else {
+      const message = await tvResponse.text().catch(() => '');
+      console.warn(
+        `[TMDB] TV search failed for "${title}" (${tvResponse.status}): ${message.slice(0, 120)}`
+      );
+    }
+
+    const topMovie = movieData?.results?.[0];
+    const topTvShow = tvData?.results?.[0];
+
+    // Prefer TV result when we have one and it is at least as popular as the best movie match
+    if (topTvShow) {
+      const tvPopularity = topTvShow.popularity ?? 0;
+      const moviePopularity = topMovie?.popularity ?? 0;
+      if (!topMovie || tvPopularity >= moviePopularity) {
         return 'tv';
       }
     }
 
-    return 'movie'; // Default to movie
+    if (topMovie) {
+      return 'movie';
+    }
+
+    if (tvData?.results?.length) {
+      return 'tv';
+    }
+
+    return 'movie'; // Default to movie when nothing matches
   } catch (error) {
     console.error(`[TMDB] Error detecting content type for "${title}":`, error);
     return 'movie'; // Default to movie on error
