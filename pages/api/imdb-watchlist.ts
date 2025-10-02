@@ -82,26 +82,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           // CRITICAL FIX: Detect correct content types using TMDB
           // The VPS worker may not have run content type detection
-          console.log('[Web App] Detecting content types for worker items...');
-          try {
-            const contentTypes = await detectContentTypeBatch(
-              items.map(item => ({ title: item.title, year: item.year }))
-            );
+          const tmdbKey = process.env.TMDB_API_KEY;
+          console.log(`[Web App] TMDB API Key status: ${tmdbKey ? 'SET (length: ' + tmdbKey.length + ')' : 'MISSING ❌'}`);
 
-            // Update content types based on TMDB detection
-            items.forEach(item => {
-              const key = `${item.title}_${item.year || 'unknown'}`;
-              const detectedType = contentTypes.get(key);
-              if (detectedType) {
-                item.type = detectedType;
-              }
-            });
+          if (!tmdbKey || tmdbKey === 'your_tmdb_api_key_here') {
+            console.error('[Web App] ❌ CRITICAL: TMDB_API_KEY not configured! Content type detection will fail.');
+            console.error('[Web App] Set TMDB_API_KEY in Vercel environment variables.');
+          } else {
+            console.log('[Web App] Detecting content types for worker items...');
+            try {
+              const beforeCount = {
+                movies: items.filter(i => i.type === 'movie').length,
+                series: items.filter(i => i.type === 'tv').length
+              };
+              console.log(`[Web App] BEFORE detection: ${beforeCount.movies} movies, ${beforeCount.series} series`);
 
-            const movieCount = items.filter(item => item.type === 'movie').length;
-            const tvCount = items.filter(item => item.type === 'tv').length;
-            console.log(`[Web App] Content type detection complete: ${movieCount} movies, ${tvCount} TV series`);
-          } catch (error) {
-            console.error('[Web App] Error detecting content types:', error);
+              const contentTypes = await detectContentTypeBatch(
+                items.map(item => ({ title: item.title, year: item.year }))
+              );
+
+              console.log(`[Web App] TMDB returned ${contentTypes.size} type mappings`);
+
+              // Update content types based on TMDB detection
+              let updatedCount = 0;
+              items.forEach(item => {
+                const key = `${item.title}_${item.year || 'unknown'}`;
+                const detectedType = contentTypes.get(key);
+                if (detectedType) {
+                  if (item.type !== detectedType) {
+                    updatedCount++;
+                  }
+                  item.type = detectedType;
+                }
+              });
+
+              const afterCount = {
+                movies: items.filter(i => i.type === 'movie').length,
+                series: items.filter(i => i.type === 'tv').length
+              };
+              console.log(`[Web App] AFTER detection: ${afterCount.movies} movies, ${afterCount.series} series`);
+              console.log(`[Web App] Updated ${updatedCount} item types`);
+            } catch (error) {
+              console.error('[Web App] ❌ Error detecting content types:', error);
+              console.error('[Web App] Error details:', error instanceof Error ? error.message : String(error));
+            }
           }
         } else {
           throw new Error('VPS worker is not healthy');
