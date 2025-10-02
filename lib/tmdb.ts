@@ -431,6 +431,63 @@ export async function detectContentTypeBatch(items: Array<{ title: string; year?
   return results;
 }
 
+type ContentTypedItem = {
+  title: string;
+  year?: string;
+  type: 'movie' | 'tv';
+};
+
+interface ContentTypeSummary {
+  movies: number;
+  series: number;
+  updated: number;
+}
+
+export async function ensureContentTypesWithTMDB<T extends ContentTypedItem>(
+  items: T[],
+  context = '[TMDB Content Sync]'
+): Promise<ContentTypeSummary> {
+  if (!items.length) {
+    return { movies: 0, series: 0, updated: 0 };
+  }
+
+  const tmdbKeyPresent = TMDB_API_KEY && TMDB_API_KEY !== 'your_tmdb_api_key_here';
+  const moviesBefore = items.filter(item => item.type === 'movie').length;
+  const seriesBefore = items.filter(item => item.type === 'tv').length;
+
+  if (!tmdbKeyPresent) {
+    console.warn(`${context} TMDB_API_KEY missing – skipping detection`);
+    return { movies: moviesBefore, series: seriesBefore, updated: 0 };
+  }
+
+  console.log(`${context} Ensuring content types for ${items.length} items (before: ${moviesBefore} movies, ${seriesBefore} series)`);
+
+  try {
+    const contentTypes = await detectContentTypeBatch(
+      items.map(item => ({ title: item.title, year: item.year }))
+    );
+
+    let updated = 0;
+    items.forEach(item => {
+      const key = `${item.title}_${item.year || 'unknown'}`;
+      const detectedType = contentTypes.get(key);
+      if (detectedType && item.type !== detectedType) {
+        item.type = detectedType;
+        updated += 1;
+      }
+    });
+
+    const moviesAfter = items.filter(item => item.type === 'movie').length;
+    const seriesAfter = items.filter(item => item.type === 'tv').length;
+    console.log(`${context} Detection complete: ${moviesAfter} movies, ${seriesAfter} series (updated ${updated})`);
+
+    return { movies: moviesAfter, series: seriesAfter, updated };
+  } catch (error) {
+    console.error(`${context} Error ensuring content types:`, error);
+    return { movies: moviesBefore, series: seriesBefore, updated: 0 };
+  }
+}
+
 export async function getTMDBMetadataBatch(items: Array<{ title: string; year?: string }>): Promise<Map<string, {
   poster: string | null;
   imdbRating: number;

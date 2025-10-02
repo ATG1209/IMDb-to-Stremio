@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { APP_VERSION } from '../lib/version';
 
 export default function CatalogPreview({ userId }) {
   const [activeTab, setActiveTab] = useState('movies');
@@ -15,6 +16,14 @@ export default function CatalogPreview({ userId }) {
     setCurrentPage(0);
   }, [activeTab]);
 
+  const buildWatchlistUrl = (forceRefresh = false) => {
+    const params = new URLSearchParams({ userId, v: APP_VERSION });
+    if (forceRefresh) {
+      params.set('forceRefresh', 'true');
+    }
+    return `/api/imdb-watchlist?${params.toString()}`;
+  };
+
   const fetchWatchlist = async (forceRefresh = false) => {
     try {
       if (forceRefresh) {
@@ -24,9 +33,12 @@ export default function CatalogPreview({ userId }) {
       }
       setError(null);
 
-      const url = forceRefresh
-        ? `/api/imdb-watchlist?userId=${userId}&forceRefresh=true`
-        : `/api/imdb-watchlist?userId=${userId}`;
+      if (!userId) {
+        setError('Please enter a valid IMDb user ID');
+        return;
+      }
+
+      const url = buildWatchlistUrl(forceRefresh);
 
       const response = await fetch(url);
       const result = await response.json();

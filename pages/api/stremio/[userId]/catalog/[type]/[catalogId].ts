@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistItem, WorkerWatchlistResult } from '../../../../../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../../../../../lib/fetch-watchlist'; // Fallback for development
+import { ensureContentTypesWithTMDB } from '../../../../../../lib/tmdb';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -80,6 +81,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       refreshSource = 'direct-scrape';
     }
     
+    const tmdbKey = process.env.TMDB_API_KEY;
+    if (!tmdbKey || tmdbKey === 'your_tmdb_api_key_here') {
+      console.warn('[Catalog] TMDB_API_KEY missing – skipping content detection');
+    } else if (watchlistItems.length) {
+      try {
+        const summary = await ensureContentTypesWithTMDB(watchlistItems, '[Catalog] TMDB Sync');
+        console.log(`[Catalog] Content types normalized: ${summary.movies} movies, ${summary.series} series (updated ${summary.updated})`);
+      } catch (error) {
+        console.error('[Catalog] Error ensuring content types:', error);
+      }
+    }
+
     // Filter by content type (VPS already returns newest-first from v3.2.3+)
     const filteredItems = watchlistItems.filter(item => {
       if (type === 'movie') return item.type === 'movie';

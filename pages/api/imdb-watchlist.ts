@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistResult } from '../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../lib/fetch-watchlist';
-import { detectContentTypeBatch } from '../../lib/tmdb';
+import { ensureContentTypesWithTMDB } from '../../lib/tmdb';
 
 interface WatchlistItem {
   imdbId: string;
@@ -91,37 +91,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           } else {
             console.log('[Web App] Detecting content types for worker items...');
             try {
-              const beforeCount = {
-                movies: items.filter(i => i.type === 'movie').length,
-                series: items.filter(i => i.type === 'tv').length
-              };
-              console.log(`[Web App] BEFORE detection: ${beforeCount.movies} movies, ${beforeCount.series} series`);
-
-              const contentTypes = await detectContentTypeBatch(
-                items.map(item => ({ title: item.title, year: item.year }))
-              );
-
-              console.log(`[Web App] TMDB returned ${contentTypes.size} type mappings`);
-
-              // Update content types based on TMDB detection
-              let updatedCount = 0;
-              items.forEach(item => {
-                const key = `${item.title}_${item.year || 'unknown'}`;
-                const detectedType = contentTypes.get(key);
-                if (detectedType) {
-                  if (item.type !== detectedType) {
-                    updatedCount++;
-                  }
-                  item.type = detectedType;
-                }
-              });
-
-              const afterCount = {
-                movies: items.filter(i => i.type === 'movie').length,
-                series: items.filter(i => i.type === 'tv').length
-              };
-              console.log(`[Web App] AFTER detection: ${afterCount.movies} movies, ${afterCount.series} series`);
-              console.log(`[Web App] Updated ${updatedCount} item types`);
+              const summary = await ensureContentTypesWithTMDB(items, '[Web App] TMDB Sync');
+              console.log(`[Web App] TMDB sync summary: ${summary.movies} movies, ${summary.series} series (updated ${summary.updated})`);
             } catch (error) {
               console.error('[Web App] ❌ Error detecting content types:', error);
               console.error('[Web App] Error details:', error instanceof Error ? error.message : String(error));
@@ -153,12 +124,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     // Set cache headers - bypass cache on force refresh
-    if (shouldForceRefresh) {
-      res.setHeader('Cache-Control', 'no-store, must-revalidate');
-      res.setHeader('CDN-Cache-Control', 'no-store');
-    } else {
-      res.setHeader('Cache-Control', 'public, s-maxage=1800'); // Cache for 30 minutes
-    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
     res.setHeader('X-Refresh-Source', refreshSource);
 
     return res.status(200).json(response);

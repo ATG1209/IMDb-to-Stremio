@@ -43,7 +43,13 @@ export default function SimpleDashboard() {
 
     try {
       // Test if we can fetch the watchlist
-      const response = await fetch(`/api/imdb-watchlist?userId=${userId}`);
+      const params = new URLSearchParams({
+        userId,
+        v: APP_VERSION,
+        nocache: '1'
+      });
+
+      const response = await fetch(`/api/imdb-watchlist?${params.toString()}`);
       const data = await response.json();
 
       if (!response.ok) {
