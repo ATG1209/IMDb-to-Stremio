@@ -82,7 +82,7 @@ export default function UserDashboard() {
   const getFilteredWatchlist = () => {
     if (!watchlistData?.items) return [];
 
-    let filtered = watchlistData.items;
+    let filtered = [...watchlistData.items];
 
     // Filter by type
     if (filterType !== 'all') {
@@ -97,7 +97,8 @@ export default function UserDashboard() {
       );
     }
 
-    return filtered;
+    // Reverse order - newest added first
+    return filtered.reverse();
   };
 
   const filteredItems = getFilteredWatchlist();
