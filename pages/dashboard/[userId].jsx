@@ -364,7 +364,7 @@ export default function UserDashboard() {
                   </div>
                   <div>
                     <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {filteredItems.filter(item => item.type === 'series').length}
+                      {filteredItems.filter(item => item.type === 'tv').length}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Series</p>
                   </div>
@@ -394,7 +394,7 @@ export default function UserDashboard() {
               >
                 <option value="all">All Types</option>
                 <option value="movie">Movies Only</option>
-                <option value="series">Series Only</option>
+                <option value="tv">Series Only</option>
               </select>
             </div>
 
