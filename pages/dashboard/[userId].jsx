@@ -70,6 +70,9 @@ export default function UserDashboard() {
     setSuccess(null);
 
     try {
+      // Show progress message while scraping (can take 30-60 seconds)
+      setSuccess('🔄 Refreshing from IMDb... This may take up to 60 seconds for a fresh scrape.');
+
       const response = await fetch(`/api/imdb-watchlist?userId=${userId}&refresh=1&nocache=1`);
       const data = await response.json();
 

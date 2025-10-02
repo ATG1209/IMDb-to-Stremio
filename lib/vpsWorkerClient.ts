@@ -6,6 +6,9 @@ const CACHE_TIMEOUT_MS = 7000;
 const JOB_TIMEOUT_MS = 10000;
 const CACHE_POLL_ATTEMPTS = 6;
 const CACHE_POLL_INTERVAL_MS = 2000;
+// For manual refresh requests, poll longer to wait for fresh scrape
+const REFRESH_POLL_ATTEMPTS = 20; // 20 attempts * 3s = 60s total
+const REFRESH_POLL_INTERVAL_MS = 3000; // 3 seconds between polls
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -191,8 +194,11 @@ class VPSWorkerClient {
 
       await this.triggerJob(imdbUserId, forceRefresh);
 
-      const pollAttempts = forceRefresh ? CACHE_POLL_ATTEMPTS : Math.max(3, CACHE_POLL_ATTEMPTS - 1);
-      const polled = await this.pollCache(imdbUserId, pollAttempts, CACHE_POLL_INTERVAL_MS);
+      // For manual refreshes, poll longer to wait for fresh scrape (60s)
+      // For normal cache misses, poll shorter (12s)
+      const pollAttempts = forceRefresh ? REFRESH_POLL_ATTEMPTS : Math.max(3, CACHE_POLL_ATTEMPTS - 1);
+      const pollInterval = forceRefresh ? REFRESH_POLL_INTERVAL_MS : CACHE_POLL_INTERVAL_MS;
+      const polled = await this.pollCache(imdbUserId, pollAttempts, pollInterval);
 
       if (polled) {
         polled.source = forceRefresh ? 'worker-refresh' : 'worker-job';
