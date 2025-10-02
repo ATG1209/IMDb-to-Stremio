@@ -26,10 +26,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId } = req.query;
+  const { userId, forceRefresh } = req.query;
 
   if (!userId || typeof userId !== 'string') {
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: 'Missing userId parameter',
       message: 'Please provide a valid IMDb User ID (format: ur12345678)'
     });
@@ -43,8 +43,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
+  const shouldForceRefresh = forceRefresh === 'true';
+
   try {
-    console.log(`[Web App] Fetching watchlist for user: ${userId}`);
+    console.log(`[Web App] Fetching watchlist for user: ${userId} (forceRefresh: ${shouldForceRefresh})`);
 
     let items = [];
 
@@ -58,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (isWorkerHealthy) {
           console.log('[Web App] Using VPS worker for web app preview');
-          items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: false });
+          items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: shouldForceRefresh });
 
           // Apply reverse order for newest-first (same fix as catalog)
           items = [...items].reverse();

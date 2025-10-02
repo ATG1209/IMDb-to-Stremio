@@ -6,6 +6,8 @@ export default function CatalogPreview({ userId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState(null);
   const ITEMS_PER_PAGE = 20;
 
   // Reset page when switching tabs - MUST be before early returns
@@ -13,31 +15,46 @@ export default function CatalogPreview({ userId }) {
     setCurrentPage(0);
   }, [activeTab]);
 
+  const fetchWatchlist = async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      const url = forceRefresh
+        ? `/api/imdb-watchlist?userId=${userId}&forceRefresh=true`
+        : `/api/imdb-watchlist?userId=${userId}`;
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch watchlist');
+      }
+
+      setData(result);
+      if (forceRefresh) {
+        setLastRefreshTime(new Date());
+      }
+    } catch (err) {
+      console.error('Error fetching watchlist:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleManualRefresh = () => {
+    fetchWatchlist(true);
+  };
+
   useEffect(() => {
     if (!userId) return;
-
-    const fetchWatchlist = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await fetch(`/api/imdb-watchlist?userId=${userId}`);
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to fetch watchlist');
-        }
-
-        setData(result);
-      } catch (err) {
-        console.error('Error fetching watchlist:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWatchlist();
+    fetchWatchlist(false);
   }, [userId]);
 
   if (loading) {
@@ -97,12 +114,60 @@ export default function CatalogPreview({ userId }) {
   return (
     <div className="mt-8 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">
       <div className="text-center mb-6">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Catalog Preview
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex-1"></div>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Catalog Preview
+          </h3>
+          <div className="flex-1 flex justify-end">
+            <button
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 flex items-center space-x-2 ${
+                refreshing
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg shadow-green-500/25 hover:scale-105'
+              }`}
+              title="Fetch latest watchlist from IMDb (bypasses 12-hour cache)"
+            >
+              <svg
+                className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
+        </div>
         <p className="text-gray-600 dark:text-gray-300">
           How your watchlist will look in Stremio
         </p>
+        {lastRefreshTime && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Last refreshed: {lastRefreshTime.toLocaleTimeString()}
+          </p>
+        )}
+      </div>
+
+      {/* Info Banner */}
+      <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-xl p-4">
+        <div className="flex items-start">
+          <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-semibold mb-1">Auto-sync enabled</p>
+            <p>Your watchlist automatically updates every 12 hours. Click "Refresh" above to sync instantly with IMDb.</p>
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
