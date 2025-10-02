@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { vpsWorkerClient, WorkerWatchlistItem } from '../../../../../../lib/vpsWorkerClient';
+import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistItem, WorkerWatchlistResult } from '../../../../../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../../../../../lib/fetch-watchlist'; // Fallback for development
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -36,6 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   (Array.isArray(refresh) ? refresh[0] : refresh) === '1';
 
     let watchlistItems: WorkerWatchlistItem[] = [];
+    let refreshSource = 'unknown';
 
     // Enable VPS worker for production
     const useWorker = process.env.WORKER_URL;
@@ -46,17 +47,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const isWorkerHealthy = await vpsWorkerClient.isHealthy();
 
         if (isWorkerHealthy) {
-          watchlistItems = await vpsWorkerClient.scrapeWatchlist(userId, {
+          const workerItems = await vpsWorkerClient.scrapeWatchlist(userId, {
             forceRefresh: force
           });
+          refreshSource = (workerItems as WorkerWatchlistResult).source || 'worker-job';
+          watchlistItems = workerItems;
 
           if (isProduction) {
             console.log(`[Catalog] Using VPS worker: ${watchlistItems.length} items`);
-          }
-
-          // Treat 0 items as VPS worker failure to trigger fallback
-          if (watchlistItems.length === 0) {
-            throw new Error('VPS worker returned 0 items - likely blocked or access denied');
           }
         } else {
           throw new Error('VPS worker is not healthy');
@@ -68,15 +66,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('[Catalog] VPS worker failed, falling back to direct breakthrough extraction');
         try {
           watchlistItems = await fetchWatchlist(userId, { forceRefresh: force });
+          refreshSource = workerError instanceof WorkerPendingError ? 'fallback-after-worker-pending' : 'fallback-direct';
           console.log(`[Catalog] Fallback extraction successful: ${watchlistItems.length} items`);
         } catch (fallbackError) {
           console.error('[Catalog] Fallback extraction also failed:', fallbackError);
           watchlistItems = [];
+          refreshSource = 'fallback-error';
         }
       }
     } else {
       // No worker configured, use direct scraping (development mode)
       watchlistItems = await fetchWatchlist(userId, { forceRefresh: force });
+      refreshSource = 'direct-scrape';
     }
     
     // Filter by content type and reverse to get newest-first order (proven solution from v1.8.1)
@@ -107,6 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Set cache headers (allow Stremio to cache briefly)
     res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60');
+    res.setHeader('X-Refresh-Source', refreshSource);
 
     // Production performance logging
     if (isProduction) {

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">IMDb to Stremio Syncer Logo</title>
+  <desc id="desc">Circular gradient badge with intertwined arrows representing synchronization between IMDb and Stremio.</desc>
+  <defs>
+    <linearGradient id="bg" x1="12%" y1="8%" x2="88%" y2="92%">
+      <stop offset="0%" stop-color="#6D28D9" />
+      <stop offset="50%" stop-color="#A855F7" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+    <linearGradient id="arrow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F9FAFB" />
+      <stop offset="100%" stop-color="#E0E7FF" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#1F2937" flood-opacity="0.28" />
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <circle cx="64" cy="64" r="52" fill="url(#bg)" />
+    <path fill="none" stroke="url(#arrow)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+      d="M82 34c-6.8-5.2-15.1-8.2-24-8.2-21.6 0-39.2 17.6-39.2 39.2 0 5.8 1.3 11.4 3.8 16.5m24.4 28.5c6.8 5.2 15.1 8.2 24 8.2 21.6 0 39.2-17.6 39.2-39.2 0-5.8-1.3-11.4-3.8-16.5" />
+    <path fill="url(#arrow)" d="M92.4 39.8 69 40.5l11-17.5z" />
+    <path fill="url(#arrow)" d="M35.6 88.2 59 87.5l-11 17.5z" />
+  </g>
+</svg>

@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { vpsWorkerClient } from '../../lib/vpsWorkerClient';
+import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistResult } from '../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../lib/fetch-watchlist';
 
 interface WatchlistItem {
@@ -19,6 +19,7 @@ interface WatchlistResponse {
   totalItems: number;
   lastUpdated: string;
   userId: string;
+  source: string;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -50,6 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`[Web App] Fetching watchlist for user: ${userId} (forceRefresh: ${shouldForceRefresh})`);
 
     let items = [];
+    let refreshSource = 'unknown';
 
     // Try VPS worker first, fallback to direct scraping
     const useWorker = process.env.WORKER_URL;
@@ -61,11 +63,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (isWorkerHealthy) {
           console.log('[Web App] Using VPS worker for web app preview');
-          items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: shouldForceRefresh });
+          const workerItems = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: shouldForceRefresh });
+          refreshSource = (workerItems as WorkerWatchlistResult).source || 'worker-job';
+          const workerMetadata = (workerItems as WorkerWatchlistResult).metadata;
+          items = workerItems;
 
           // Apply reverse order for newest-first (same fix as catalog)
           if (items && items.length > 0) {
             items = [...items].reverse();
+          }
+
+          // Preserve source flag after copying array
+          (items as WorkerWatchlistResult).source = refreshSource;
+          if (workerMetadata) {
+            (items as WorkerWatchlistResult).metadata = workerMetadata;
           }
         } else {
           throw new Error('VPS worker is not healthy');
@@ -76,43 +87,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Fallback to direct scraping
         console.log('[Web App] Falling back to direct scraping');
         items = await fetchWatchlist(userId);
+        refreshSource = workerError instanceof WorkerPendingError ? 'fallback-after-worker-pending' : 'fallback-direct';
       }
     } else {
       // No worker configured, use direct scraping
       items = await fetchWatchlist(userId);
+      refreshSource = 'direct-scrape';
     }
 
     const response: WatchlistResponse = {
       items,
       totalItems: items.length,
       lastUpdated: new Date().toISOString(),
-      userId
+      userId,
+      source: refreshSource
     };
 
     // Set cache headers
     res.setHeader('Cache-Control', 'public, s-maxage=1800'); // Cache for 30 minutes
+    res.setHeader('X-Refresh-Source', refreshSource);
 
     return res.status(200).json(response);
 
   } catch (error) {
     console.error('Error fetching watchlist:', error);
-    
+
+    const message = error instanceof Error ? error.message : '';
     let errorMessage = 'Error desconocido al acceder a la watchlist';
-    
-    if (error.message.includes('net::ERR_NAME_NOT_RESOLVED')) {
+
+    if (message.includes('net::ERR_NAME_NOT_RESOLVED')) {
       errorMessage = 'No se pudo conectar a IMDb. Verifica tu conexión a internet.';
-    } else if (error.message.includes('404') || error.message.includes('not found')) {
+    } else if (message.includes('404') || message.includes('not found')) {
       errorMessage = 'Usuario no encontrado. Verifica que el User ID sea correcto.';
-    } else if (error.message.includes('privada') || error.message.includes('private')) {
-      errorMessage = error.message;
-    } else if (error.message.includes('timeout')) {
+    } else if (message.includes('privada') || message.includes('private')) {
+      errorMessage = message;
+    } else if (message.includes('timeout')) {
       errorMessage = 'Tiempo de espera agotado. IMDb puede estar lento, intenta de nuevo.';
     }
 
     return res.status(500).json({
       error: 'Failed to fetch watchlist',
       message: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' && message ? message : undefined
     });
   }
 }

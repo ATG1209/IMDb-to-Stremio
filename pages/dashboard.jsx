@@ -146,10 +146,15 @@ export default function Dashboard() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-200 dark:bg-gray-900/80 dark:border-gray-800">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <img
+              src="/logo.svg"
+              alt="IMDb to Stremio Syncer logo"
+              className="w-9 h-9 hidden sm:block drop-shadow-lg"
+            />
             <div className="flex flex-col">
               <h1 className="text-xl font-bold">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-teal-600">
-                  IMDb → Stremio
+                  IMDb → Stremio Syncer
                 </span>
               </h1>
               <span className="text-xs text-gray-500 dark:text-gray-400">App v{APP_VERSION} · Addon v{ADDON_VERSION}</span>

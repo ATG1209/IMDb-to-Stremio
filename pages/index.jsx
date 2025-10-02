@@ -53,11 +53,13 @@ export default function Home() {
       {/* Header */}
       <header className="relative z-10 pt-8 pb-4">
         <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">IM</span>
-            </div>
-            <span className="font-semibold text-gray-900 dark:text-white">IMDb → Stremio</span>
+          <div className="flex items-center space-x-3">
+            <img
+              src="/logo.svg"
+              alt="IMDb to Stremio Syncer logo"
+              className="w-9 h-9 drop-shadow-lg"
+            />
+            <span className="font-semibold text-gray-900 dark:text-white">IMDb → Stremio Syncer</span>
           </div>
           <ThemeToggle />
         </div>

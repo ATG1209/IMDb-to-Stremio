@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { vpsWorkerClient } from '../../lib/vpsWorkerClient';
+import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistResult } from '../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../lib/fetch-watchlist'; // Fallback
 
 let syncInProgress = false;
@@ -30,8 +30,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (isWorkerHealthy && process.env.WORKER_URL) {
         // Use VPS worker
         try {
-          items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh });
-          source = 'vps-worker';
+          const workerItems = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh });
+          source = (workerItems as WorkerWatchlistResult).source || 'vps-worker';
+          items = workerItems;
           console.log(`[Sync] VPS worker returned ${items.length} items`);
         } catch (workerError) {
           console.error('[Sync] VPS worker failed:', workerError);
@@ -40,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (process.env.NODE_ENV !== 'production') {
             console.log('[Sync] Falling back to direct scraping...');
             items = await fetchWatchlist(userId, { forceRefresh });
-            source = 'fallback-direct';
+            source = workerError instanceof WorkerPendingError ? 'fallback-after-worker-pending' : 'fallback-direct';
           } else {
             throw workerError;
           }

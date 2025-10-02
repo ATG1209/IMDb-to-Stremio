@@ -1,4 +1,4 @@
-# IMDb to Stremio Migrator
+# IMDb to Stremio Syncer
 
 Modernized UI
 - Tailwind CSS-based responsive layout

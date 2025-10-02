@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { APP_VERSION, ADDON_VERSION } from '../../lib/version';
+import { ADDON_VERSION } from '../../lib/version';
 import ThemeToggle from '../../components/ThemeToggle';
 
 export default function UserDashboard() {
@@ -17,6 +17,23 @@ export default function UserDashboard() {
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [refreshSource, setRefreshSource] = useState('');
+
+  const describeSource = (source) => {
+    const lookup = {
+      'worker-cache': 'VPS cache',
+      'worker-job': 'VPS worker (fresh)',
+      'worker-refresh': 'VPS worker (manual refresh)',
+      'worker-stale': 'VPS cache (stale)',
+      'fallback-direct': 'Direct scrape fallback',
+      'fallback-after-worker-pending': 'Fallback (worker timeout)',
+      'direct-scrape': 'Direct scrape',
+      'development-direct': 'Local scrape',
+      'fallback-error': 'Fallback failed',
+      'vps-worker': 'VPS worker'
+    };
+    return lookup[source] || (source ? source.replace(/-/g, ' ') : 'unknown');
+  };
 
   // Load watchlist data on mount
   useEffect(() => {
@@ -39,6 +56,7 @@ export default function UserDashboard() {
 
       setWatchlistData(data);
       setLastSynced(new Date());
+      setRefreshSource(data.source || 'unknown');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -59,9 +77,17 @@ export default function UserDashboard() {
         throw new Error(data.message || 'Sync failed');
       }
 
+      const sourceLabel = describeSource(data.source || 'unknown');
+      const totalItems = data.items?.length || 0;
+
       setWatchlistData(data);
       setLastSynced(new Date());
-      setSuccess(`✓ Synced successfully! Found ${data.items?.length || 0} items.`);
+      setRefreshSource(data.source || 'unknown');
+      setSuccess(
+        totalItems > 0
+          ? `✓ Synced via ${sourceLabel}. Found ${totalItems} items.`
+          : `Sync via ${sourceLabel} completed but returned 0 items. Double-check your IMDb watchlist visibility.`
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -117,6 +143,7 @@ export default function UserDashboard() {
     return `${days}d ago`;
   };
 
+
   if (!userId) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
@@ -143,10 +170,16 @@ export default function UserDashboard() {
               </svg>
             </button>
 
+            <img
+              src="/logo.svg"
+              alt="IMDb to Stremio Syncer logo"
+              className="w-9 h-9 hidden sm:block drop-shadow-lg"
+            />
+
             <div className="flex flex-col">
               <h1 className="text-lg font-bold">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
-                  IMDb → Stremio
+                  IMDb → Stremio Syncer
                 </span>
               </h1>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">{userId}</span>
@@ -251,6 +284,11 @@ export default function UserDashboard() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Last synced: {formatTimeAgo(lastSynced)}
                 </p>
+                {refreshSource && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Source: {describeSource(refreshSource)}
+                  </p>
+                )}
               </div>
               <button
                 onClick={handleManualSync}
