@@ -7,7 +7,7 @@ const JOB_TIMEOUT_MS = 10000;
 const CACHE_POLL_ATTEMPTS = 6;
 const CACHE_POLL_INTERVAL_MS = 2000;
 // For manual refresh requests, poll longer to wait for fresh scrape
-const REFRESH_POLL_ATTEMPTS = 20; // 20 attempts * 3s = 60s total
+const REFRESH_POLL_ATTEMPTS = 30; // 30 attempts * 3s = 90s total
 const REFRESH_POLL_INTERVAL_MS = 3000; // 3 seconds between polls
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -111,7 +111,7 @@ class VPSWorkerClient {
     }
   }
 
-  private async triggerJob(imdbUserId: string, forceRefresh: boolean): Promise<void> {
+  private async triggerJob(imdbUserId: string, forceRefresh: boolean): Promise<string | null> {
     console.log(`[VPSWorker] Triggering ${forceRefresh ? 'force ' : ''}job for ${imdbUserId}`);
 
     const response = await fetch(`${this.baseUrl}/jobs`, {
@@ -130,7 +130,9 @@ class VPSWorkerClient {
     }
 
     const jobResult = await response.json().catch(() => ({}));
+    const jobId = jobResult.jobId || jobResult.id || null;
     console.log(`[VPSWorker] Job accepted for ${imdbUserId}`, jobResult);
+    return jobId;
   }
 
   private async pollCache(imdbUserId: string, attempts: number, delayMs: number): Promise<WorkerWatchlistResult | null> {
@@ -147,6 +149,48 @@ class VPSWorkerClient {
       }
     }
 
+    return null;
+  }
+
+  private async pollJobStatus(jobId: string, attempts: number, delayMs: number): Promise<WorkerWatchlistResult | null> {
+    console.log(`[VPSWorker] Polling job status for ${jobId}`);
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const response = await fetch(`${this.baseUrl}/jobs/${jobId}`, {
+          headers: {
+            ...this.authHeaders(),
+            Accept: 'application/json'
+          },
+          signal: createTimeoutSignal(CACHE_TIMEOUT_MS)
+        });
+
+        if (response.ok) {
+          const job = await response.json();
+
+          if (job.status === 'completed' && job.result) {
+            console.log(`[VPSWorker] Job ${jobId} completed on attempt ${attempt}`);
+            const items = job.result as WorkerWatchlistResult;
+            return items;
+          }
+
+          if (job.status === 'failed') {
+            console.warn(`[VPSWorker] Job ${jobId} failed:`, job.error);
+            return null;
+          }
+
+          console.log(`[VPSWorker] Job ${jobId} status: ${job.status} (attempt ${attempt}/${attempts})`);
+        }
+      } catch (error) {
+        console.warn(`[VPSWorker] Error checking job status (attempt ${attempt}):`, error);
+      }
+
+      if (attempt < attempts) {
+        await sleep(delayMs);
+      }
+    }
+
+    console.warn(`[VPSWorker] Job ${jobId} did not complete within ${attempts * delayMs / 1000}s`);
     return null;
   }
 
@@ -192,13 +236,29 @@ class VPSWorkerClient {
         }
       }
 
-      await this.triggerJob(imdbUserId, forceRefresh);
+      const jobId = await this.triggerJob(imdbUserId, forceRefresh);
 
-      // For manual refreshes, poll longer to wait for fresh scrape (60s)
+      // For manual refreshes, poll longer to wait for fresh scrape (90s)
       // For normal cache misses, poll shorter (12s)
       const pollAttempts = forceRefresh ? REFRESH_POLL_ATTEMPTS : Math.max(3, CACHE_POLL_ATTEMPTS - 1);
       const pollInterval = forceRefresh ? REFRESH_POLL_INTERVAL_MS : CACHE_POLL_INTERVAL_MS;
-      const polled = await this.pollCache(imdbUserId, pollAttempts, pollInterval);
+
+      let polled: WorkerWatchlistResult | null = null;
+
+      // If we have a jobId, poll job status for more reliable completion detection
+      if (jobId && forceRefresh) {
+        console.log(`[VPSWorker] Polling job status for ${jobId} (${pollAttempts} attempts)`);
+        polled = await this.pollJobStatus(jobId, pollAttempts, pollInterval);
+
+        // If job polling fails, fall back to cache polling
+        if (!polled) {
+          console.warn('[VPSWorker] Job status polling failed, falling back to cache polling');
+          polled = await this.pollCache(imdbUserId, 5, pollInterval); // Quick cache check
+        }
+      } else {
+        // No jobId or not a force refresh - use cache polling
+        polled = await this.pollCache(imdbUserId, pollAttempts, pollInterval);
+      }
 
       if (polled) {
         polled.source = forceRefresh ? 'worker-refresh' : 'worker-job';

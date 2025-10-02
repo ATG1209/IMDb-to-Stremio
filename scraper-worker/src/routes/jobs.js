@@ -73,7 +73,7 @@ router.post('/', authenticateRequest, validateJobRequest, async (req, res) => {
 });
 
 // GET /jobs/:id - Get job status and results
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateRequest, async (req, res) => {
   try {
     const { id } = req.params;
     const job = await jobStorage.getJob(id);
@@ -109,7 +109,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // GET /jobs - List jobs (with pagination)
-router.get('/', async (req, res) => {
+router.get('/', authenticateRequest, async (req, res) => {
   try {
     const {
       limit = 50,

@@ -103,8 +103,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       source: refreshSource
     };
 
-    // Set cache headers
-    res.setHeader('Cache-Control', 'public, s-maxage=1800'); // Cache for 30 minutes
+    // Set cache headers - bypass cache on force refresh
+    if (shouldForceRefresh) {
+      res.setHeader('Cache-Control', 'no-store, must-revalidate');
+      res.setHeader('CDN-Cache-Control', 'no-store');
+    } else {
+      res.setHeader('Cache-Control', 'public, s-maxage=1800'); // Cache for 30 minutes
+    }
     res.setHeader('X-Refresh-Source', refreshSource);
 
     return res.status(200).json(response);
