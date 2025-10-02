@@ -78,8 +78,8 @@ export default function CatalogPreview({ userId }) {
   }
 
   // Reverse order so newest items appear first (same as addon)
-  const movies = (data?.items?.filter(item => item.type === 'movie') || []).reverse();
-  const series = (data?.items?.filter(item => item.type === 'tv') || []).reverse();
+  const movies = data?.items ? [...data.items].filter(item => item.type === 'movie').reverse() : [];
+  const series = data?.items ? [...data.items].filter(item => item.type === 'tv').reverse() : [];
 
   const currentItems = activeTab === 'movies' ? movies : series;
 
