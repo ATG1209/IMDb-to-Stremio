@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { userId, forceRefresh } = req.query;
+  const { userId, forceRefresh, refresh, nocache } = req.query;
 
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({
@@ -43,7 +43,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 
-  const shouldForceRefresh = forceRefresh === 'true';
+  // Support multiple refresh parameter formats
+  const shouldForceRefresh = forceRefresh === 'true' || refresh === '1' || nocache === '1';
 
   try {
     console.log(`[Web App] Fetching watchlist for user: ${userId} (forceRefresh: ${shouldForceRefresh})`);

@@ -86,9 +86,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return true;
     });
 
-    // User requested oldest-first order (opposite of previous newest-first)
-    const sortedItems = [...filteredItems]; // No reverse = oldest-first order
-    console.log(`[Catalog] Using oldest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
+    // Reverse to newest-first order (most recently added at top)
+    const sortedItems = [...filteredItems].reverse();
+    console.log(`[Catalog] Using newest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
     // Convert to Stremio catalog format
     const metas = sortedItems.map(item => {
