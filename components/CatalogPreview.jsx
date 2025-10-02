@@ -8,6 +8,11 @@ export default function CatalogPreview({ userId }) {
   const [currentPage, setCurrentPage] = useState(0);
   const ITEMS_PER_PAGE = 20;
 
+  // Reset page when switching tabs - MUST be before early returns
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [activeTab]);
+
   useEffect(() => {
     if (!userId) return;
 
@@ -88,11 +93,6 @@ export default function CatalogPreview({ userId }) {
   const startIndex = currentPage * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const displayItems = currentItems.slice(startIndex, endIndex);
-
-  // Reset page when switching tabs
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [activeTab]);
 
   return (
     <div className="mt-8 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">

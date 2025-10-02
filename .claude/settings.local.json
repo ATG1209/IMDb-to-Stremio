@@ -52,7 +52,10 @@
       "WebFetch(domain:imdbto-stremio.vercel.app)",
       "WebFetch(domain:imdb-migrator-kupuwb4tv-atgs-projects-577e9691.vercel.app)",
       "WebFetch(domain:imdb-migrator.vercel.app)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__list_console_messages",
+      "mcp__chrome-devtools__take_snapshot"
     ],
     "deny": [],
     "ask": []
