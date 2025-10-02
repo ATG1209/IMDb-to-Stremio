@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { vpsWorkerClient, WorkerPendingError, WorkerWatchlistResult } from '../../lib/vpsWorkerClient';
 import { fetchWatchlist } from '../../lib/fetch-watchlist';
+import { detectContentTypeBatch } from '../../lib/tmdb';
 
 interface WatchlistItem {
   imdbId: string;
@@ -83,7 +84,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // The VPS worker may not have run content type detection
           console.log('[Web App] Detecting content types for worker items...');
           try {
-            const { detectContentTypeBatch } = await import('../../lib/tmdb');
             const contentTypes = await detectContentTypeBatch(
               items.map(item => ({ title: item.title, year: item.year }))
             );
