@@ -61,7 +61,7 @@ export default function UserDashboard() {
 
       setWatchlistData(data);
       setLastSynced(new Date());
-      setSuccess(`✓ Synced successfully! Found ${data.data?.length || 0} items.`);
+      setSuccess(`✓ Synced successfully! Found ${data.items?.length || 0} items.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,9 +80,9 @@ export default function UserDashboard() {
   };
 
   const getFilteredWatchlist = () => {
-    if (!watchlistData?.data) return [];
+    if (!watchlistData?.items) return [];
 
-    let filtered = watchlistData.data;
+    let filtered = watchlistData.items;
 
     // Filter by type
     if (filterType !== 'all') {
@@ -286,7 +286,7 @@ export default function UserDashboard() {
                   </div>
                   <div>
                     <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {watchlistData?.data?.length || 0}
+                      {watchlistData?.items?.length || 0}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Total Items</p>
                   </div>
@@ -411,7 +411,7 @@ export default function UserDashboard() {
 
                 <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Showing {filteredItems.length} of {watchlistData?.data?.length || 0} items
+                    Showing {filteredItems.length} of {watchlistData?.items?.length || 0} items
                   </p>
                 </div>
               </div>
