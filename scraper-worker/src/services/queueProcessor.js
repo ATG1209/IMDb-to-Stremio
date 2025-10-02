@@ -86,6 +86,12 @@ class QueueProcessor {
         progress: 'Scraping IMDb watchlist...'
       });
 
+      // If force refresh, clear existing cache first
+      if (job.forceRefresh) {
+        logger.info(`Force refresh requested - clearing cache for user ${job.imdbUserId}`);
+        await redisClient.del(`watchlist:${job.imdbUserId}`);
+      }
+
       // Scrape the watchlist
       const watchlistItems = await this.scraper.scrapeWatchlist(job.imdbUserId);
 
@@ -102,10 +108,11 @@ class QueueProcessor {
       await jobStorage.saveResult(job.id, result);
 
       // Save to watchlist cache for direct access by production app
-      // Cache for 12 hours to keep data fresh with new IMDb additions
+      // Cache for 12 hours for normal scrapes, 1 hour for force refresh (to encourage fresh scrapes)
+      const cacheTTL = job.forceRefresh ? 1 * 60 * 60 : 12 * 60 * 60; // 1 hour or 12 hours
       await redisClient.setEx(
         `watchlist:${job.imdbUserId}`,
-        12 * 60 * 60, // 12 hours
+        cacheTTL,
         JSON.stringify(watchlistItems)
       );
 
