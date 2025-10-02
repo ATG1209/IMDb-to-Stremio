@@ -441,11 +441,6 @@ export default function UserDashboard() {
                         <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {item.name || item.title}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded">
-                            {item.type === 'movie' ? 'Movie' : 'Series'}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   ))}

@@ -68,12 +68,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const workerMetadata = (workerItems as WorkerWatchlistResult).metadata;
           items = workerItems;
 
-          // Apply reverse order for newest-first (same fix as catalog)
-          if (items && items.length > 0) {
-            items = [...items].reverse();
-          }
-
-          // Preserve source flag after copying array
+          // VPS worker already returns items in newest-first order, no need to reverse
+          // Preserve source flag and metadata
           (items as WorkerWatchlistResult).source = refreshSource;
           if (workerMetadata) {
             (items as WorkerWatchlistResult).metadata = workerMetadata;
