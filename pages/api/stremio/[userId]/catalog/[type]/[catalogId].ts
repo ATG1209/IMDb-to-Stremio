@@ -80,16 +80,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       refreshSource = 'direct-scrape';
     }
     
-    // Filter by content type and reverse to get newest-first order (proven solution from v1.8.1)
+    // Filter by content type (VPS already returns newest-first from v3.2.3+)
     const filteredItems = watchlistItems.filter(item => {
       if (type === 'movie') return item.type === 'movie';
       if (type === 'series') return item.type === 'tv';
       return true;
     });
 
-    // Reverse to newest-first order (most recently added at top)
-    const sortedItems = [...filteredItems].reverse();
-    console.log(`[Catalog] Using newest-first order. Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
+    // VPS worker already returns newest-first, no need to reverse
+    const sortedItems = filteredItems;
+    console.log(`[Catalog] Newest-first order (from VPS). Total items: ${sortedItems.length}, first 3: ${sortedItems.slice(0, 3).map(x => x.title).join(', ')}`);
 
     // Convert to Stremio catalog format
     const metas = sortedItems.map(item => {
