@@ -78,6 +78,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (workerMetadata) {
             (items as WorkerWatchlistResult).metadata = workerMetadata;
           }
+
+          // CRITICAL FIX: Detect correct content types using TMDB
+          // The VPS worker may not have run content type detection
+          console.log('[Web App] Detecting content types for worker items...');
+          try {
+            const { detectContentTypeBatch } = await import('../../lib/tmdb');
+            const contentTypes = await detectContentTypeBatch(
+              items.map(item => ({ title: item.title, year: item.year }))
+            );
+
+            // Update content types based on TMDB detection
+            items.forEach(item => {
+              const key = `${item.title}_${item.year || 'unknown'}`;
+              const detectedType = contentTypes.get(key);
+              if (detectedType) {
+                item.type = detectedType;
+              }
+            });
+
+            const movieCount = items.filter(item => item.type === 'movie').length;
+            const tvCount = items.filter(item => item.type === 'tv').length;
+            console.log(`[Web App] Content type detection complete: ${movieCount} movies, ${tvCount} TV series`);
+          } catch (error) {
+            console.error('[Web App] Error detecting content types:', error);
+          }
         } else {
           throw new Error('VPS worker is not healthy');
         }
