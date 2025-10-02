@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { fetchWatchlist } from '../../../lib/fetch-watchlist';
+import { vpsWorkerClient } from '../../../lib/vpsWorkerClient';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -41,18 +41,22 @@ async function saveSyncState(state: SyncState) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // This endpoint should be called by external cron services like GitHub Actions,
-  // Vercel Cron, or external services like cron-job.org
-  
-  if (req.method !== 'POST') {
+  // This endpoint is called by Vercel Cron (configured in vercel.json)
+  // Vercel Cron automatically handles authentication
+
+  if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Simple authentication (in production, use proper auth)
+  // Vercel Cron sends requests, or manual POST with auth token
   const authToken = req.headers.authorization?.replace('Bearer ', '');
-  const expectedToken = process.env.CRON_SECRET || 'development-secret';
-  
-  if (authToken !== expectedToken) {
+  const expectedToken = process.env.CRON_SECRET;
+
+  // Allow Vercel Cron (no auth header) or manual trigger with auth token
+  const isVercelCron = !authToken && req.headers['user-agent']?.includes('vercel');
+  const isAuthorized = isVercelCron || (expectedToken && authToken === expectedToken);
+
+  if (!isAuthorized) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -82,7 +86,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = process.env.DEFAULT_IMDB_USER_ID || 'ur31595220';
 
     try {
-      const items = await fetchWatchlist(userId, { forceRefresh: true });
+      // Use VPS worker for production reliability
+      console.log(`[Cron] Triggering VPS worker refresh for ${userId}`);
+
+      // Check if VPS worker is available
+      const isWorkerHealthy = await vpsWorkerClient.isHealthy();
+      if (!isWorkerHealthy) {
+        throw new Error('VPS worker is not healthy');
+      }
+
+      // Trigger VPS worker to scrape fresh data
+      const items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: true });
+
       const result = {
         totalItems: items.length,
         lastUpdated: new Date().toISOString(),
