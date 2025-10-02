@@ -5,6 +5,8 @@ export default function CatalogPreview({ userId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
     if (!userId) return;
@@ -75,11 +77,22 @@ export default function CatalogPreview({ userId }) {
     );
   }
 
-  const movies = data?.items?.filter(item => item.type === 'movie') || [];
-  const series = data?.items?.filter(item => item.type === 'tv') || [];
+  // Reverse order so newest items appear first (same as addon)
+  const movies = (data?.items?.filter(item => item.type === 'movie') || []).reverse();
+  const series = (data?.items?.filter(item => item.type === 'tv') || []).reverse();
 
   const currentItems = activeTab === 'movies' ? movies : series;
-  const displayItems = currentItems.slice(0, 20); // Show max 20 items
+
+  // Pagination
+  const totalPages = Math.ceil(currentItems.length / ITEMS_PER_PAGE);
+  const startIndex = currentPage * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const displayItems = currentItems.slice(startIndex, endIndex);
+
+  // Reset page when switching tabs
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [activeTab]);
 
   return (
     <div className="mt-8 bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 dark:border-gray-600/50 p-8">
@@ -211,10 +224,39 @@ export default function CatalogPreview({ userId }) {
         </div>
       )}
 
-      {displayItems.length > 0 && currentItems.length > 20 && (
-        <div className="mt-6 text-center">
+      {/* Pagination Controls */}
+      {displayItems.length > 0 && totalPages > 1 && (
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+              disabled={currentPage === 0}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg shadow-purple-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span>Previous</span>
+            </button>
+
+            <div className="px-6 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-700 dark:text-gray-300 font-semibold">
+              Page {currentPage + 1} of {totalPages}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+              disabled={currentPage === totalPages - 1}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-lg transition-all duration-200 shadow-lg shadow-purple-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+            >
+              <span>Next</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Showing {displayItems.length} of {currentItems.length} {activeTab} • More will be available in Stremio
+            Showing {startIndex + 1}-{Math.min(endIndex, currentItems.length)} of {currentItems.length} {activeTab}
           </p>
         </div>
       )}

@@ -11,6 +11,7 @@ export default function SimpleDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (router.query.userId) {
@@ -72,7 +73,11 @@ export default function SimpleDashboard() {
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopied(true);
       setSuccess('¡URL copiada al portapapeles!');
+
+      // Reset copied state after animation
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       setError('No se pudo copiar al portapapeles');
     }
@@ -229,12 +234,27 @@ export default function SimpleDashboard() {
                       />
                       <button
                         onClick={() => copyToClipboard(addonUrl)}
-                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-purple-500/25 flex items-center justify-center space-x-2"
+                        className={`px-6 py-3 font-semibold rounded-xl transition-all duration-300 shadow-lg flex items-center justify-center space-x-2 transform ${
+                          copied
+                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 scale-110 shadow-green-500/25'
+                            : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 hover:scale-105 shadow-purple-500/25'
+                        } text-white`}
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        <span>Copy</span>
+                        {copied ? (
+                          <>
+                            <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            <span>Copy</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

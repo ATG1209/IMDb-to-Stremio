@@ -117,47 +117,153 @@ The project is currently in early development (M0 milestone). Core CSV parsing i
 - **Debugging**: Check browser console logs in `page.evaluate()` context
 - **Performance**: Balance speed vs completeness based on user needs
 
-## VPS Worker Architecture
+## Complete System Architecture
 
-**IMPORTANT**: This local repository is mirrored by a VPS worker running at `37.27.92.76:3003`.
+**This project has a HYBRID architecture:** Vercel frontend + VPS backend worker.
 
-### **How VPS Integration Works**
-- **Local Development**: Code changes are made in this repository (`/Users/at/Development/IMDb/scraper-worker/`)
-- **VPS Deployment**: The VPS mirrors this GitHub repository automatically
-- **Deployment Process**:
-  1. Push changes to GitHub: `git push origin main`
-  2. VPS pulls changes: `git pull origin main` (on VPS)
-  3. Restart VPS worker service to apply changes
+### **Architecture Overview**
 
-### **VPS Worker Details**
+```
+User Browser (Stremio App)
+    ↓
+Vercel Deployment (imdb-migrator.vercel.app)
+├─ Web App UI (Dashboard, Catalog Preview)
+└─ Stremio API Endpoints (/api/stremio/*)
+    ↓
+    Calls VPS Worker for data
+    ↓
+VPS Worker Service (37.27.92.76:3003)
+├─ IMDb Scraping (Playwright)
+├─ TMDB Integration (Poster images)
+└─ Redis Cache (24-hour TTL)
+```
+
+### **How the System Works**
+
+1. **User visits web app** → https://imdb-migrator.vercel.app
+2. **Enters IMDb user ID** → e.g., ur31595220
+3. **Vercel API calls VPS Worker:**
+   - Checks cache first: `GET /cache/:userId`
+   - If cache miss: `POST /jobs` (triggers scraping)
+4. **VPS Worker processes request:**
+   - Launches Playwright browser
+   - Scrapes IMDb watchlist
+   - Cleans titles (removes numbering: "410. Title" → "Title")
+   - Calls TMDB API for posters
+   - Caches to Redis
+5. **Vercel serves Stremio addon** with data from VPS
+6. **User installs in Stremio** → addon works perfectly!
+
+### **Deployment Workflow**
+
+**For Vercel (Frontend + API):**
+- Automatically deploys on `git push origin main`
+- No manual steps needed
+- Environment variables set in Vercel dashboard
+
+**For VPS Worker (Backend scraping):**
+  1. Make changes locally and push to GitHub: `git push origin main`
+  2. Provide VPS dev with copy-paste instructions (see below)
+  3. VPS dev executes commands on VPS server
+  4. Verify changes are deployed and working
+
+### **Production URLs**
+
+**Vercel (Main deployment):**
+- Web App: `https://imdb-migrator.vercel.app`
+- Addon Manifest: `https://imdb-migrator.vercel.app/api/stremio/ur31595220/manifest.json`
+- Movie Catalog: `https://imdb-migrator.vercel.app/api/stremio/ur31595220/catalog/movie/imdb-movies-ur31595220.json`
+- Series Catalog: `https://imdb-migrator.vercel.app/api/stremio/ur31595220/catalog/series/imdb-series-ur31595220.json`
+
+**VPS Worker (Backend only):**
 - **Location**: Remote VPS at `37.27.92.76`
-- **Port**: `3003`
-- **Endpoints**:
-  - Jobs: `http://37.27.92.76:3003/jobs`
-  - Cache: `http://37.27.92.76:3003/cache/{userId}`
-  - Health: `http://37.27.92.76:3003/health`
-- **Authentication**: Bearer token `worker-secret`
+- **Port**: 3003 (HTTP only, not public-facing)
+- **Endpoints** (Internal use only):
+  - Worker Jobs: `http://37.27.92.76:3003/jobs`
+  - Worker Cache: `http://37.27.92.76:3003/cache/{userId}`
+  - Worker Health: `http://37.27.92.76:3003/health`
+- **Authentication**: Bearer token `imdb-worker-2025-secret`
+
+### **Environment Variables**
+
+**Vercel Environment:**
+```bash
+NODE_ENV=production
+WORKER_URL=http://37.27.92.76:3003
+WORKER_SECRET=imdb-worker-2025-secret
+```
+
+**VPS Worker Environment:**
+```bash
+NODE_ENV=production
+TMDB_API_KEY=09a2e4b535394bb6a9e1d248cf87d5ac
+DEFAULT_IMDB_USER_ID=ur31595220
+WORKER_SECRET=imdb-worker-2025-secret
+REDIS_URL=redis://localhost:6379
+```
+
+### **Working with VPS Dev**
+When changes need to be deployed to the VPS, Claude will provide **copy-paste instructions** for the VPS dev to execute. These instructions will be clearly marked and ready to copy-paste directly into the VPS terminal.
+
+**Example workflow:**
+1. Claude makes code changes locally
+2. Claude pushes to GitHub
+3. Claude generates copy-paste instructions for VPS dev
+4. User sends instructions to VPS dev
+5. VPS dev executes commands
+6. Claude verifies deployment with test commands
+
+### **Standard VPS Deployment Commands**
+```bash
+# Navigate to worker directory
+cd /path/to/scraper-worker
+
+# Pull latest changes from GitHub
+git pull origin main
+
+# Install any new dependencies (if package.json changed)
+npm install
+
+# Restart worker service
+npm restart
+
+# Verify worker is running
+curl http://localhost:3003/health
+```
 
 ### **Testing Changes on VPS**
 ```bash
-# After pushing changes to GitHub:
-# 1. SSH to VPS and pull changes
-git pull origin main
-npm restart
-
-# 2. Test VPS worker
+# Test worker job submission
 curl -X POST http://37.27.92.76:3003/jobs \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer imdb-worker-2025-secret" \
   -d '{"imdbUserId": "ur31595220", "forceRefresh": true}'
 
-# 3. Verify cache
-curl -H "Authorization: Bearer worker-secret" \
-  http://37.27.92.76:3003/cache/ur31595220
+# Check job status
+curl -H "Authorization: Bearer imdb-worker-2025-secret" \
+  http://37.27.92.76:3003/jobs
+
+# Verify cache data
+curl -H "Authorization: Bearer imdb-worker-2025-secret" \
+  http://37.27.92.76:3003/cache/ur31595220 | jq '.data[0]'
+
+# Test addon manifest
+curl http://37.27.92.76:3000/api/stremio/ur31595220/manifest.json
 ```
 
 ## Claude Code Workflow
 
-**ALWAYS provide manifest URLs after making changes:**
-- User's manifest: `http://localhost:3002/api/stremio/ur31595220/manifest.json?v={VERSION}`
-- Generic manifest: `http://localhost:3002/api/stremio/manifest.json?v={VERSION}`
+**ALWAYS provide production URLs after making changes:**
+- Web App: `https://imdb-migrator.vercel.app`
+- Addon Manifest: `https://imdb-migrator.vercel.app/api/stremio/ur31595220/manifest.json?v={VERSION}`
 - This allows immediate testing of updates in Stremio
+
+**Local Development URLs:**
+- Local Web App: `http://localhost:3000`
+- Local Manifest: `http://localhost:3000/api/stremio/ur31595220/manifest.json?v={VERSION}`
+
+## Key Documentation
+
+**For complete architecture and troubleshooting:**
+- See `/Context/Ultimate-Workflow-Fix.md` for comprehensive system documentation
+- See `/Context/Open-Issues/Server Issue - TMDB Posters & HTTPS.md` for issue resolution history
