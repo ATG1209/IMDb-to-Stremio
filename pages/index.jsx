@@ -30,16 +30,16 @@ export default function Home() {
     if (!imdbUserId.trim()) return;
 
     setIsLoading(true);
-    
+
     const userId = extractUserIdFromUrl(imdbUserId);
     if (!userId) {
-      alert('Por favor ingresa un IMDb User ID válido (formato: ur12345678) o una URL de perfil de IMDb');
+      alert('Please enter a valid IMDb User ID (format: ur12345678) or IMDb profile URL');
       setIsLoading(false);
       return;
     }
 
-    // Navigate to simple dashboard with the user ID
-    router.push(`/simple-dashboard?userId=${userId}`);
+    // Navigate to new persistent dashboard
+    router.push(`/dashboard/${userId}`);
   };
 
   return (
@@ -82,6 +82,10 @@ export default function Home() {
             
             <p className="text-xl text-gray-600 dark:text-gray-100 mb-2 max-w-md mx-auto">
               Transform your IMDb watchlist into a personalized Stremio addon
+            </p>
+
+            <p className="text-sm text-gray-500 dark:text-gray-300 mt-3 max-w-md mx-auto">
+              Your dashboard will be at: <code className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-purple-700 dark:text-purple-200 font-mono">/dashboard/ur12345678</code>
             </p>
             
             <div className="flex flex-wrap justify-center gap-4 text-sm">
