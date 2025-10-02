@@ -40,3 +40,4 @@ Execute the CLI:
 ```
 npm start
 ```
+# v3.4.0
