@@ -102,9 +102,10 @@ class QueueProcessor {
       await jobStorage.saveResult(job.id, result);
 
       // Save to watchlist cache for direct access by production app
+      // Cache for 12 hours to keep data fresh with new IMDb additions
       await redisClient.setEx(
         `watchlist:${job.imdbUserId}`,
-        30 * 24 * 60 * 60, // 30 days
+        12 * 60 * 60, // 12 hours
         JSON.stringify(watchlistItems)
       );
 
