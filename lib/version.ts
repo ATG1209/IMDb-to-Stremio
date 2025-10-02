@@ -1,2 +1,2 @@
-export const APP_VERSION = '3.2.1';
-export const ADDON_VERSION = '3.2.1';
+export const APP_VERSION = '3.2.2';
+export const ADDON_VERSION = '3.2.2';
