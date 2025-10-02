@@ -828,9 +828,12 @@ export class ImdbScraper {
 
         const addedAt = new Date(Date.now() - (offset + index) * 850).toISOString();
 
+        // Clean IMDb numbering from title (e.g., "410. Black Book" -> "Black Book")
+        const cleanedTitle = entry.title.replace(/^\d+\.\s*/, '').trim();
+
         return {
           imdbId: entry.imdbId,
-          title: entry.title,
+          title: cleanedTitle,
           year: entry.year || undefined,
           type: entry.type === 'tv' ? 'tv' : 'movie',
           poster: entry.poster || undefined,
