@@ -170,7 +170,9 @@ class VPSWorkerClient {
 
           if (job.status === 'completed' && job.result) {
             console.log(`[VPSWorker] Job ${jobId} completed on attempt ${attempt}`);
-            const items = job.result as WorkerWatchlistResult;
+            // Job result is {totalItems, items, lastUpdated, ...} - extract items array
+            const resultData = job.result.items || job.result;
+            const items = (Array.isArray(resultData) ? resultData : []) as WorkerWatchlistResult;
             return items;
           }
 
