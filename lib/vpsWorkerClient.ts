@@ -76,7 +76,31 @@ class VPSWorkerClient {
         }
       }
 
-      // Step 2: Trigger async job and return immediately with error (triggers fallback)
+      // Step 2: If forceRefresh, check cache one more time (job might have just completed)
+      if (options.forceRefresh) {
+        console.log(`[VPSWorker] Force refresh requested, checking cache again...`);
+
+        try {
+          const cacheResponse = await fetch(`${this.baseUrl}/cache/${imdbUserId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.WORKER_SECRET || 'worker-secret'}`
+            },
+            timeout: 5000
+          });
+
+          if (cacheResponse.ok) {
+            const cacheResult = await cacheResponse.json();
+            if (cacheResult.success && cacheResult.data && cacheResult.data.length > 0) {
+              console.log(`[VPSWorker] Cache found ${cacheResult.data.length} items after force refresh`);
+              return cacheResult.data;
+            }
+          }
+        } catch (cacheError) {
+          console.warn('[VPSWorker] Final cache check failed');
+        }
+      }
+
+      // Step 3: Trigger async job and return immediately with error (triggers fallback)
       console.log(`[VPSWorker] Triggering async scrape job for user ${imdbUserId}...`);
 
       const jobResponse = await fetch(`${this.baseUrl}/jobs`, {

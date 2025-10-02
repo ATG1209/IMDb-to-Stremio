@@ -64,7 +64,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           items = await vpsWorkerClient.scrapeWatchlist(userId, { forceRefresh: shouldForceRefresh });
 
           // Apply reverse order for newest-first (same fix as catalog)
-          items = [...items].reverse();
+          if (items && items.length > 0) {
+            items = [...items].reverse();
+          }
         } else {
           throw new Error('VPS worker is not healthy');
         }
