@@ -1,6 +1,52 @@
 import { useState, useEffect } from 'react';
 import { APP_VERSION } from '../lib/version';
 
+const CACHE_KEY_PREFIX = 'imdbWatchlist:';
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+const getCacheKey = (userId) => `${CACHE_KEY_PREFIX}${userId}`;
+
+const loadCachedWatchlist = (userId) => {
+  if (typeof window === 'undefined' || !userId) return null;
+
+  try {
+    const rawCache = window.localStorage.getItem(getCacheKey(userId));
+    if (!rawCache) return null;
+
+    const parsed = JSON.parse(rawCache);
+
+    if (!parsed || parsed.version !== APP_VERSION) {
+      return null;
+    }
+
+    if (Date.now() - parsed.timestamp > CACHE_TTL_MS) {
+      window.localStorage.removeItem(getCacheKey(userId));
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    console.warn('[CatalogPreview] Failed to read cached watchlist', error);
+    return null;
+  }
+};
+
+const saveCachedWatchlist = (userId, data) => {
+  if (typeof window === 'undefined' || !userId) return;
+
+  try {
+    const payload = {
+      version: APP_VERSION,
+      timestamp: Date.now(),
+      data,
+    };
+
+    window.localStorage.setItem(getCacheKey(userId), JSON.stringify(payload));
+  } catch (error) {
+    console.warn('[CatalogPreview] Failed to store watchlist cache', error);
+  }
+};
+
 export default function CatalogPreview({ userId }) {
   const [activeTab, setActiveTab] = useState('movies');
   const [data, setData] = useState(null);
@@ -24,11 +70,11 @@ export default function CatalogPreview({ userId }) {
     return `/api/imdb-watchlist?${params.toString()}`;
   };
 
-  const fetchWatchlist = async (forceRefresh = false) => {
+  const fetchWatchlist = async (forceRefresh = false, { background = false } = {}) => {
     try {
       if (forceRefresh) {
         setRefreshing(true);
-      } else {
+      } else if (!background) {
         setLoading(true);
       }
       setError(null);
@@ -48,14 +94,20 @@ export default function CatalogPreview({ userId }) {
       }
 
       setData(result);
-      if (forceRefresh) {
-        setLastRefreshTime(new Date());
-      }
+      saveCachedWatchlist(userId, result);
+      const updatedAt = result?.lastUpdated ? new Date(result.lastUpdated) : new Date();
+      setLastRefreshTime(updatedAt);
     } catch (err) {
       console.error('Error fetching watchlist:', err);
-      setError(err.message);
+      if (!background) {
+        setError(err.message);
+      } else {
+        console.warn('[CatalogPreview] Background refresh failed:', err);
+      }
     } finally {
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
   };
@@ -65,8 +117,30 @@ export default function CatalogPreview({ userId }) {
   };
 
   useEffect(() => {
-    if (!userId) return;
-    fetchWatchlist(false);
+    if (!userId) {
+      setData(null);
+      setLoading(false);
+      setLastRefreshTime(null);
+      setError(null);
+      setCurrentPage(0);
+      return;
+    }
+
+    setError(null);
+    setCurrentPage(0);
+
+    const cached = loadCachedWatchlist(userId);
+
+    if (cached?.data) {
+      setData(cached.data);
+      setLoading(false);
+      setLastRefreshTime(new Date(cached.timestamp));
+    } else {
+      setLoading(true);
+      setLastRefreshTime(null);
+    }
+
+    fetchWatchlist(false, { background: Boolean(cached?.data) });
   }, [userId]);
 
   if (loading) {
