@@ -80,24 +80,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             (items as WorkerWatchlistResult).metadata = workerMetadata;
           }
 
-          // CRITICAL FIX: Detect correct content types using TMDB
-          // The VPS worker may not have run content type detection
-          const tmdbKey = process.env.TMDB_API_KEY;
-          console.log(`[Web App] TMDB API Key status: ${tmdbKey ? 'SET (length: ' + tmdbKey.length + ')' : 'MISSING ❌'}`);
-
-          if (!tmdbKey || tmdbKey === 'your_tmdb_api_key_here') {
-            console.error('[Web App] ❌ CRITICAL: TMDB_API_KEY not configured! Content type detection will fail.');
-            console.error('[Web App] Set TMDB_API_KEY in Vercel environment variables.');
-          } else {
-            console.log('[Web App] Detecting content types for worker items...');
-            try {
-              const summary = await ensureContentTypesWithTMDB(items, '[Web App] TMDB Sync');
-              console.log(`[Web App] TMDB sync summary: ${summary.movies} movies, ${summary.series} series (updated ${summary.updated})`);
-            } catch (error) {
-              console.error('[Web App] ❌ Error detecting content types:', error);
-              console.error('[Web App] Error details:', error instanceof Error ? error.message : String(error));
-            }
-          }
+          // OPTIMIZATION: Skip TMDB detection for VPS worker data
+          // VPS worker already runs TMDB content type detection and caching
+          // Only run TMDB detection when using fallback direct scraping
+          console.log('[Web App] ✓ Using VPS worker data (already has TMDB content types)');
         } else {
           throw new Error('VPS worker is not healthy');
         }
@@ -108,11 +94,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('[Web App] Falling back to direct scraping');
         items = await fetchWatchlist(userId);
         refreshSource = workerError instanceof WorkerPendingError ? 'fallback-after-worker-pending' : 'fallback-direct';
+
+        // Run TMDB detection for fallback data (since it didn't go through VPS worker)
+        const tmdbKey = process.env.TMDB_API_KEY;
+        if (tmdbKey && tmdbKey !== 'your_tmdb_api_key_here') {
+          console.log('[Web App] Running TMDB detection for fallback data...');
+          try {
+            const summary = await ensureContentTypesWithTMDB(items, '[Web App] Fallback TMDB');
+            console.log(`[Web App] Fallback TMDB: ${summary.movies} movies, ${summary.series} series`);
+          } catch (error) {
+            console.error('[Web App] Error in fallback TMDB detection:', error);
+          }
+        }
       }
     } else {
       // No worker configured, use direct scraping
       items = await fetchWatchlist(userId);
       refreshSource = 'direct-scrape';
+
+      // Run TMDB detection for direct scrape data
+      const tmdbKey = process.env.TMDB_API_KEY;
+      if (tmdbKey && tmdbKey !== 'your_tmdb_api_key_here') {
+        console.log('[Web App] Running TMDB detection for direct scrape data...');
+        try {
+          const summary = await ensureContentTypesWithTMDB(items, '[Web App] Direct Scrape TMDB');
+          console.log(`[Web App] Direct scrape TMDB: ${summary.movies} movies, ${summary.series} series`);
+        } catch (error) {
+          console.error('[Web App] Error in direct scrape TMDB detection:', error);
+        }
+      }
     }
 
     const response: WatchlistResponse = {
@@ -123,11 +133,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       source: refreshSource
     };
 
-    // Set cache headers - bypass cache on force refresh
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('CDN-Cache-Control', 'no-store');
-    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+    // Smart caching: Enable browser/CDN cache for normal loads, disable for manual refresh
+    if (shouldForceRefresh) {
+      // Manual refresh: bypass all caches
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('CDN-Cache-Control', 'no-store');
+      res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+      console.log('[Web App] Cache disabled (manual refresh)');
+    } else {
+      // Normal load: enable 5-minute browser/CDN cache
+      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
+      res.setHeader('CDN-Cache-Control', 'public, max-age=300');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=300');
+      console.log('[Web App] Cache enabled (5 minutes)');
+    }
     res.setHeader('X-Refresh-Source', refreshSource);
 
     return res.status(200).json(response);

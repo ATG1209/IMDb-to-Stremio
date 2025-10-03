@@ -47,9 +47,8 @@ export default function UserDashboard() {
     setError(null);
 
     try {
-      // Add timestamp to prevent Vercel edge cache from serving stale data
-      const timestamp = Date.now();
-      const response = await fetch(`/api/imdb-watchlist?userId=${userId}&t=${timestamp}`);
+      // Normal load: use stable URL to enable browser/CDN caching
+      const response = await fetch(`/api/imdb-watchlist?userId=${userId}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -75,9 +74,8 @@ export default function UserDashboard() {
       // Show progress message while scraping (can take 30-60 seconds)
       setSuccess('🔄 Refreshing from IMDb... This may take up to 60 seconds for a fresh scrape.');
 
-      // Add timestamp to bust Vercel edge cache
-      const timestamp = Date.now();
-      const response = await fetch(`/api/imdb-watchlist?userId=${userId}&refresh=1&nocache=1&t=${timestamp}`);
+      // Manual refresh: use cache-busting parameters to force fresh data
+      const response = await fetch(`/api/imdb-watchlist?userId=${userId}&refresh=1&nocache=1`);
       const data = await response.json();
 
       if (!response.ok) {
