@@ -250,13 +250,13 @@ export default function CatalogPreview({ userId }) {
                 </div>
               </div>
 
-              {/* IMDb Rating Badge - Always visible */}
+              {/* IMDb Rating Badge - Always visible at bottom */}
               {item.imdbRating && item.imdbRating > 0 && (
                 <a
                   href={`https://www.imdb.com/title/${item.imdbId}/`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute top-2 right-2 bg-yellow-500/90 hover:bg-yellow-400 backdrop-blur-sm px-2 py-1 rounded-md shadow-lg transition-all duration-200 hover:scale-110 z-10"
+                  className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-yellow-500/95 hover:bg-yellow-400 backdrop-blur-sm px-2.5 py-1 rounded-md shadow-lg transition-all duration-200 hover:scale-110 z-10"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center gap-1">
@@ -267,20 +267,6 @@ export default function CatalogPreview({ userId }) {
                   </div>
                 </a>
               )}
-
-              {/* Hover overlay with title */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                <div className="p-3 w-full">
-                  <h4 className="text-white text-sm font-semibold line-clamp-2 mb-1">
-                    {item.title}
-                  </h4>
-                  {item.year && (
-                    <p className="text-gray-300 text-xs">
-                      {item.year}
-                    </p>
-                  )}
-                </div>
-              </div>
             </div>
           ))}
         </div>
