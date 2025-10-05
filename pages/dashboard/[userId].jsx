@@ -95,7 +95,7 @@ export default function UserDashboard() {
             : `Sync via ${sourceLabel} completed but returned 0 items.`
         );
       })
-      .catch((err) => {
+      .catch(() => {
         setError('Refresh failed. Using cached data.');
         // User still has cached data, so not critical
       })
