@@ -508,31 +508,36 @@ export async function fetchWatchlist(userId: string, opts?: { forceRefresh?: boo
       }
     }
 
-    // Enhance items with TMDB posters (optimized for speed and coverage)
+    // Enhance items with TMDB data (posters and ratings)
     if (allItems.length > 0) {
-      console.log(`[fetchWatchlist] Fetching TMDB posters for all ${allItems.length} items...`);
+      console.log(`[fetchWatchlist] Fetching TMDB data for all ${allItems.length} items...`);
       try {
-        // Use poster-only batch for speed - covers ALL items (movies and TV series)
-        const tmdbPosters = await getTMDBPosterBatch(
+        // Fetch complete metadata including posters and ratings
+        const tmdbMetadata = await getTMDBMetadataBatch(
           allItems.map(item => ({ title: item.title, year: item.year }))
         );
 
-        // Apply posters to all items
+        // Apply TMDB data to all items
         allItems.forEach(item => {
           const key = `${item.title}_${item.year || 'unknown'}`;
-          const poster = tmdbPosters.get(key);
-          if (poster) {
-            item.poster = poster;
+          const metadata = tmdbMetadata.get(key);
+          if (metadata) {
+            if (metadata.poster) item.poster = metadata.poster;
+            if (metadata.imdbRating) item.imdbRating = metadata.imdbRating;
+            if (metadata.numRatings) item.numRatings = metadata.numRatings;
+            if (metadata.runtime) item.runtime = metadata.runtime;
+            if (metadata.popularity) item.popularity = metadata.popularity;
           }
         });
 
         const posterCount = allItems.filter(item => item.poster).length;
+        const ratingCount = allItems.filter(item => item.imdbRating && item.imdbRating > 0).length;
         const movieCount = allItems.filter(item => item.type === 'movie').length;
         const tvCount = allItems.filter(item => item.type === 'tv').length;
-        console.log(`[fetchWatchlist] ${posterCount}/${allItems.length} items now have TMDB posters (${movieCount} movies, ${tvCount} TV series)`);
+        console.log(`[fetchWatchlist] Enhanced ${allItems.length} items: ${posterCount} posters, ${ratingCount} ratings (${movieCount} movies, ${tvCount} TV series)`);
 
       } catch (error) {
-        console.error('[fetchWatchlist] Error fetching TMDB posters:', error);
+        console.error('[fetchWatchlist] Error fetching TMDB data:', error);
       }
     }
 

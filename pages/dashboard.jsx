@@ -406,7 +406,7 @@ export default function Dashboard() {
                   {filteredItems.map((item, index) => (
                     <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
                       <div className="flex items-start gap-4">
-                        <div className="w-16 h-24 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <div className="w-16 h-24 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 relative">
                           {item.poster ? (
                             <img src={item.poster} alt={item.title} className="w-full h-full object-cover rounded-lg" />
                           ) : (
@@ -414,8 +414,25 @@ export default function Dashboard() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16l9-8-9-8z" />
                             </svg>
                           )}
+                          {/* IMDb Rating Badge */}
+                          {item.imdbRating && item.imdbRating > 0 && (
+                            <a
+                              href={`https://www.imdb.com/title/${item.imdbId}/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="absolute -bottom-2 -right-2 bg-yellow-500 hover:bg-yellow-400 px-1.5 py-0.5 rounded-md shadow-lg transition-all duration-200 hover:scale-110"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-xs">⭐</span>
+                                <span className="text-xs font-bold text-gray-900">
+                                  {item.imdbRating.toFixed(1)}
+                                </span>
+                              </div>
+                            </a>
+                          )}
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-1 truncate">
                             {item.title}

@@ -116,6 +116,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (item.year) meta.year = parseInt(item.year);
       if (item.poster) meta.poster = item.poster;
 
+      // Add IMDb rating to description if available
+      if (item.imdbRating && item.imdbRating > 0) {
+        meta.description = `⭐ ${item.imdbRating.toFixed(1)}/10 IMDb\n\n${meta.description}`;
+        meta.imdbRating = item.imdbRating.toFixed(1);
+      }
+
+      // Add IMDb link for clickability
+      meta.links = [
+        {
+          name: 'IMDb',
+          category: 'imdb',
+          url: `https://www.imdb.com/title/${item.imdbId}/`
+        }
+      ];
+
       return meta;
     });
 
