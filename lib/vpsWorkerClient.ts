@@ -212,7 +212,19 @@ class VPSWorkerClient {
     }
   }
 
-  // Smart cache-first approach
+  // Trigger background refresh without waiting for result
+  private async triggerBackgroundRefresh(imdbUserId: string): Promise<void> {
+    console.log(`[VPSWorker] Triggering background refresh for ${imdbUserId}`);
+    try {
+      await this.triggerJob(imdbUserId, false);
+      // Don't wait for completion - fire and forget
+    } catch (error) {
+      console.warn(`[VPSWorker] Background refresh failed: ${error}`);
+      // Silent fail - user already has cached data
+    }
+  }
+
+  // Smart cache-first approach with stale-while-revalidate
   async scrapeWatchlist(imdbUserId: string, options: {
     forceRefresh?: boolean;
   } = {}): Promise<WorkerWatchlistResult> {
@@ -223,21 +235,39 @@ class VPSWorkerClient {
     try {
       const forceRefresh = options.forceRefresh === true;
 
-      let preRefreshCache: WorkerWatchlistResult | null = null;
+      // ALWAYS check cache first
+      const cached = await this.fetchCache(imdbUserId);
 
-      if (!forceRefresh) {
-        const cached = await this.fetchCache(imdbUserId);
-        if (cached) {
-          cached.source = 'worker-cache';
+      if (cached && cached.length > 0) {
+        // Cache exists - serve it immediately
+        cached.source = 'worker-cache';
+
+        // Check if stale (> 6 hours old)
+        const cachedAt = cached.metadata?.cachedAt || cached.metadata?.lastScraped;
+        if (cachedAt) {
+          const cacheAge = Date.now() - new Date(cachedAt as string).getTime();
+          const isStale = cacheAge > 6 * 60 * 60 * 1000; // 6 hours
+
+          if (isStale && !forceRefresh) {
+            // Start background refresh but return stale cache now
+            console.log(`[VPSWorker] Cache is stale (${Math.floor(cacheAge / 1000 / 60)} minutes old), triggering background refresh`);
+            this.triggerBackgroundRefresh(imdbUserId).catch(err =>
+              console.warn('[VPSWorker] Background refresh trigger failed:', err)
+            );
+          }
+        }
+
+        // If not force refresh, return cache immediately (even if stale)
+        if (!forceRefresh) {
+          console.log(`[VPSWorker] Returning cached data (${cached.length} items)`);
           return cached;
         }
-      } else {
-        preRefreshCache = await this.fetchCache(imdbUserId, 'pre-refresh');
-        if (preRefreshCache) {
-          console.log(`[VPSWorker] Force refresh requested — existing cache has ${preRefreshCache.length} items`);
-        }
+
+        // For force refresh, store cache but continue to trigger fresh scrape
+        console.log(`[VPSWorker] Force refresh requested - existing cache has ${cached.length} items`);
       }
 
+      // No cache exists OR force refresh requested - trigger scraping
       await this.triggerJob(imdbUserId, forceRefresh);
 
       // For manual refreshes, poll longer to wait for fresh scrape (90s)
@@ -245,7 +275,7 @@ class VPSWorkerClient {
       const pollAttempts = forceRefresh ? REFRESH_POLL_ATTEMPTS : Math.max(3, CACHE_POLL_ATTEMPTS - 1);
       const pollInterval = forceRefresh ? REFRESH_POLL_INTERVAL_MS : CACHE_POLL_INTERVAL_MS;
 
-      // Simple approach: just poll cache until data is ready
+      // Poll cache until data is ready
       console.log(`[VPSWorker] Polling cache for ${imdbUserId} (${pollAttempts} attempts, ${pollInterval}ms interval)`);
       const polled = await this.pollCache(imdbUserId, pollAttempts, pollInterval);
 
@@ -254,10 +284,12 @@ class VPSWorkerClient {
         return polled;
       }
 
-      if (forceRefresh && preRefreshCache) {
-        console.warn('[VPSWorker] Force refresh timed out; returning previously cached data');
-        preRefreshCache.source = 'worker-stale';
-        return preRefreshCache;
+      // Polling timed out
+      if (cached && cached.length > 0) {
+        // Return stale cache if scraping failed/timed out
+        console.warn('[VPSWorker] Scraping timed out; returning previously cached data');
+        cached.source = 'worker-stale';
+        return cached;
       }
 
       throw new WorkerPendingError('VPS worker job queued but cache not ready yet');

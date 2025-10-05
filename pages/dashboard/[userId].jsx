@@ -18,6 +18,7 @@ export default function UserDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [refreshSource, setRefreshSource] = useState('');
+  const [cacheMetadata, setCacheMetadata] = useState(null);
 
   const describeSource = (source) => {
     const lookup = {
@@ -58,6 +59,7 @@ export default function UserDashboard() {
       setWatchlistData(data);
       setLastSynced(new Date());
       setRefreshSource(data.source || 'unknown');
+      setCacheMetadata(data.cacheMetadata || null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -68,36 +70,38 @@ export default function UserDashboard() {
   const handleManualSync = async () => {
     setIsSyncing(true);
     setError(null);
-    setSuccess(null);
+    setSuccess('🔄 Refreshing from IMDb... (you can keep browsing)');
 
-    try {
-      // Show progress message while scraping (can take 30-60 seconds)
-      setSuccess('🔄 Refreshing from IMDb... This may take up to 60 seconds for a fresh scrape.');
+    // Non-blocking: Don't await - let it run in background
+    fetch(`/api/imdb-watchlist?userId=${userId}&refresh=1&nocache=1`)
+      .then(async (response) => {
+        const data = await response.json();
 
-      // Manual refresh: use cache-busting parameters to force fresh data
-      const response = await fetch(`/api/imdb-watchlist?userId=${userId}&refresh=1&nocache=1`);
-      const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Sync failed');
+        }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Sync failed');
-      }
+        const sourceLabel = describeSource(data.source || 'unknown');
+        const totalItems = data.items?.length || 0;
 
-      const sourceLabel = describeSource(data.source || 'unknown');
-      const totalItems = data.items?.length || 0;
-
-      setWatchlistData(data);
-      setLastSynced(new Date());
-      setRefreshSource(data.source || 'unknown');
-      setSuccess(
-        totalItems > 0
-          ? `✓ Synced via ${sourceLabel}. Found ${totalItems} items.`
-          : `Sync via ${sourceLabel} completed but returned 0 items. Double-check your IMDb watchlist visibility.`
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsSyncing(false);
-    }
+        // Update UI with new data
+        setWatchlistData(data);
+        setLastSynced(new Date());
+        setRefreshSource(data.source || 'unknown');
+        setCacheMetadata(data.cacheMetadata || null);
+        setSuccess(
+          totalItems > 0
+            ? `✓ Refreshed! Found ${totalItems} items from ${sourceLabel}.`
+            : `Sync via ${sourceLabel} completed but returned 0 items.`
+        );
+      })
+      .catch((err) => {
+        setError('Refresh failed. Using cached data.');
+        // User still has cached data, so not critical
+      })
+      .finally(() => {
+        setIsSyncing(false);
+      });
   };
 
   const copyToClipboard = async (text) => {
@@ -146,6 +150,14 @@ export default function UserDashboard() {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
+  };
+
+  const formatCacheAge = (cacheAge) => {
+    if (!cacheAge) return '';
+    const hours = Math.floor(cacheAge / (1000 * 60 * 60));
+    const minutes = Math.floor((cacheAge % (1000 * 60 * 60)) / (1000 * 60));
+    if (hours === 0) return `${minutes}m old`;
+    return `${hours}h ${minutes}m old`;
   };
 
 
@@ -289,6 +301,16 @@ export default function UserDashboard() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Last synced: {formatTimeAgo(lastSynced)}
                 </p>
+                {cacheMetadata && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Cache: {formatCacheAge(cacheMetadata.cacheAge)}
+                    {cacheMetadata.isStale && (
+                      <span className="ml-2 text-yellow-600 dark:text-yellow-500">
+                        • Refreshing in background...
+                      </span>
+                    )}
+                  </p>
+                )}
                 {refreshSource && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Source: {describeSource(refreshSource)}
@@ -586,6 +608,17 @@ export default function UserDashboard() {
           </div>
         )}
       </main>
+
+      {/* Floating refresh status indicator */}
+      {isSyncing && (
+        <div className="fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50">
+          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+          </svg>
+          <span>Refreshing...</span>
+        </div>
+      )}
     </div>
   );
 }

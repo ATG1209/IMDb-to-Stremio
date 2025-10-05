@@ -15,12 +15,20 @@ interface WatchlistItem {
   addedAt: string;
 }
 
+interface CacheMetadata {
+  lastScraped: string;
+  cacheAge: number;
+  isStale: boolean;
+  nextRefresh?: string;
+}
+
 interface WatchlistResponse {
   items: WatchlistItem[];
   totalItems: number;
   lastUpdated: string;
   userId: string;
   source: string;
+  cacheMetadata?: CacheMetadata;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -125,12 +133,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Build cache metadata
+    const workerMetadata = (items as WorkerWatchlistResult).metadata;
+    const now = new Date().toISOString();
+    const lastScraped = workerMetadata?.lastScraped || workerMetadata?.cachedAt || now;
+    const cacheAge = lastScraped === now ? 0 : Date.now() - new Date(lastScraped as string).getTime();
+    const isStale = cacheAge > 6 * 60 * 60 * 1000; // Stale if > 6 hours old
+
     const response: WatchlistResponse = {
       items,
       totalItems: items.length,
       lastUpdated: new Date().toISOString(),
       userId,
-      source: refreshSource
+      source: refreshSource,
+      cacheMetadata: {
+        lastScraped: lastScraped as string,
+        cacheAge,
+        isStale
+      }
     };
 
     // Smart caching: Enable browser/CDN cache for normal loads, disable for manual refresh
@@ -140,15 +160,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('CDN-Cache-Control', 'no-store');
       res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+      res.setHeader('X-Refresh-Triggered', 'manual');
       console.log('[Web App] Cache disabled (manual refresh)');
     } else {
-      // Normal load: enable 5-minute browser/CDN cache
-      res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300');
-      res.setHeader('CDN-Cache-Control', 'public, max-age=300');
-      res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=300');
-      console.log('[Web App] Cache enabled (5 minutes)');
+      // Normal load: enable 2-hour browser/CDN cache with stale-while-revalidate
+      res.setHeader('Cache-Control', 'public, max-age=7200, s-maxage=7200, stale-while-revalidate=86400');
+      res.setHeader('CDN-Cache-Control', 'public, max-age=7200');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=7200');
+      res.setHeader('X-Cache-Age', Math.floor(cacheAge / 1000).toString());
+      res.setHeader('X-Cache-Status', isStale ? 'stale' : 'fresh');
+      console.log('[Web App] Cache enabled (2 hours with stale-while-revalidate)');
     }
     res.setHeader('X-Refresh-Source', refreshSource);
+    res.setHeader('Vary', 'Accept');
 
     return res.status(200).json(response);
 
