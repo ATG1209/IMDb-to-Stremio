@@ -140,16 +140,34 @@ export default function UserDashboard() {
   const addonUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/api/stremio/${userId}/manifest.json?v=${ADDON_VERSION}` : '';
 
-  const formatTimeAgo = (date) => {
-    if (!date) return 'Never';
-    const seconds = Math.floor((new Date() - date) / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const formatSyncTime = (date) => {
+    if (!date) return 'Not synced yet';
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    // If less than 1 minute ago, show "Just now"
+    if (diffMins < 1) return 'Just now';
+
+    // If today, show time
+    if (date.toDateString() === now.toDateString()) {
+      return `Today at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // If yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    // Otherwise show full date and time
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   const formatCacheAge = (cacheAge) => {
@@ -299,7 +317,7 @@ export default function UserDashboard() {
               <div>
                 <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Your Watchlist</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Last synced: {formatTimeAgo(lastSynced)}
+                  Last synced: {formatSyncTime(lastSynced)}
                 </p>
                 {cacheMetadata && (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -446,7 +464,7 @@ export default function UserDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {filteredItems.map((item, index) => (
                     <div key={index} className="group">
-                      <div className="aspect-[2/3] bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden group-hover:ring-2 group-hover:ring-purple-500 transition-all">
+                      <div className="aspect-[2/3] bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden group-hover:ring-2 group-hover:ring-purple-500 transition-all relative">
                         {item.poster ? (
                           <img
                             src={item.poster}
@@ -460,11 +478,43 @@ export default function UserDashboard() {
                             </svg>
                           </div>
                         )}
+
+                        {/* IMDb Rating Badge on poster */}
+                        {item.imdbRating && item.imdbRating > 0 && (
+                          <a
+                            href={`https://www.imdb.com/title/${item.imdbId}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-yellow-500/95 hover:bg-yellow-400 backdrop-blur-sm px-2.5 py-1 rounded-md shadow-lg transition-all duration-200 hover:scale-110 z-10"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm">⭐</span>
+                              <span className="text-xs font-bold text-gray-900">
+                                {item.imdbRating.toFixed(1)}
+                              </span>
+                            </div>
+                          </a>
+                        )}
                       </div>
-                      <div className="mt-2">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {item.name || item.title}
-                        </p>
+
+                      {/* Rating badge below poster (replaces title) */}
+                      <div className="mt-2 text-center">
+                        {item.imdbRating && item.imdbRating > 0 ? (
+                          <a
+                            href={`https://www.imdb.com/title/${item.imdbId}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-yellow-500/90 hover:bg-yellow-400 rounded-md transition-colors"
+                          >
+                            <span className="text-sm">⭐</span>
+                            <span className="text-xs font-bold text-gray-900">
+                              {item.imdbRating.toFixed(1)}
+                            </span>
+                          </a>
+                        ) : (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">No rating</span>
+                        )}
                       </div>
                     </div>
                   ))}
