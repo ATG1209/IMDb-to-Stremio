@@ -1,14 +1,17 @@
 # Rating Display Issues - Investigation Document
 
-**Status**: UNRESOLVED
+**Status**: DIAGNOSED – CODE UPDATE REQUIRED
 **Version**: 3.7.1
-**Branch**: feature/imdb-ratings
+**Branch**: feature/imdb-ratings (dashboard still uses legacy sync cache)
 **Created**: 2025-10-06
+**Last Reviewed**: 2025-10-07
 **Reporter**: User feedback via screenshots
 
 ## Problem Summary
 
 Despite multiple fixes to TypeScript interfaces and UI components, IMDb ratings are not displaying in the web app dashboard. The UI shows "No rating" below movie posters, even though the API endpoints are confirmed to return valid rating data.
+
+**Key finding (2025-10-07)**: the dashboard never touches the enriched data coming from `fetch-watchlist.ts`/VPS worker. Instead, `/api/watchlist` hydrates the UI from the legacy cache file `data/watchlist-cache.json` that is created by `lib/imdb-sync.ts`. That sync service still saves items without `imdbRating`, so the UI faithfully renders `undefined` values as "No rating".
 
 ### Symptoms
 
@@ -210,218 +213,95 @@ TMDB batch processing confirmed working:
 - Maps ratings to items by title-year key
 - Adds `imdbRating`, `numRatings`, `runtime`, `popularity` to items
 
-## Potential Root Causes
+## Confirmed Failure Point
 
-### 1. **Data Not Persisting Through Cache**
-The dashboard might be loading from cached data that predates the rating implementation.
+- `/api/watchlist` is the only endpoint the dashboard hits during initial load (see `pages/dashboard.jsx` → `loadWatchlist`).
+- That endpoint reads `data/watchlist-cache.json` via `pages/api/watchlist.ts` without touching the enriched data path.
+- `lib/imdb-sync.ts` writes the cache file after the Playwright sync, but its `WatchlistItem` omits every rating-related field, so the persisted objects look like:
 
-**Files to Check**:
-- `data/watchlist-cache.json` (local file cache)
-- Redis cache on VPS (if using worker)
-- Browser localStorage/sessionStorage
-
-**Test**: Force fresh scrape with `?refresh=1&nocache=1` parameter
-
----
-
-### 2. **TypeScript Interface Mismatch**
-Despite fixing both interfaces, there might be another interface definition or type casting that's stripping the rating field.
-
-**Search For**: All `WatchlistItem` interface definitions
-```bash
-grep -r "interface WatchlistItem" pages/
-grep -r "WatchlistItem" lib/
-```
-
----
-
-### 3. **React State Not Updating**
-The UI components might not be re-rendering when data changes.
-
-**Files to Check**:
-- `pages/dashboard.jsx` - State management for items
-- `pages/dashboard/[userId].jsx` - useEffect dependencies
-- `components/CatalogPreview.jsx` - Props handling
-
-**Test**: Add console.log to see what data is actually received:
-```javascript
-console.log('Dashboard items:', items.map(i => ({
-  title: i.title,
-  imdbRating: i.imdbRating
-})));
-```
-
----
-
-### 4. **API Route Caching**
-Next.js might be caching the API response before ratings were added.
-
-**Headers to Check** (`pages/api/imdb-watchlist.ts:162-180`):
-```typescript
-if (shouldForceRefresh) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-} else {
-  res.setHeader('Cache-Control', 'public, max-age=7200, s-maxage=7200, stale-while-revalidate=86400');
-}
-```
-
-**Test**: Try accessing dashboard with `?refresh=1` parameter
-
----
-
-### 5. **VPS Worker Not Updated**
-If using VPS worker (`WORKER_URL=http://37.27.92.76:3003`), the worker might not have the latest code that fetches ratings.
-
-**Files to Check**:
-- VPS worker's `scraper-worker/lib/fetch-watchlist.ts`
-- VPS worker's environment variables
-
-**Test**: Disable worker and use local scraping:
-```bash
-# Temporarily unset WORKER_URL
-unset WORKER_URL
-npm run dev
-```
-
----
-
-### 6. **Browser Cache/Hot Reload Issue**
-The browser might be serving stale JavaScript bundles.
-
-**Test**:
-1. Hard refresh: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
-2. Clear browser cache
-3. Try incognito/private window
-4. Restart dev server: `npm run dev`
-
----
-
-## Debugging Steps for Other Developers
-
-### Step 1: Verify API Response
-```bash
-curl http://localhost:3000/api/imdb-watchlist?userId=ur31595220&refresh=1 | jq '.items[0]'
-```
-
-**Expected Output**:
 ```json
 {
   "imdbId": "tt0253474",
   "title": "The Pianist",
-  "imdbRating": 8.38,
-  "numRatings": 912345
+  "type": "movie",
+  "addedAt": "2025-10-07T03:58:21.123Z"
 }
 ```
 
-**If missing**: Issue is in backend scraping/TMDB integration
+- Each dashboard render therefore receives `imdbRating === undefined` and the badge falls back to "No rating". The worker/TMDB pipeline never enters this request path.
 
----
+### Evidence: Legacy Sync Writer
 
-### Step 2: Check Browser Network Tab
-1. Open DevTools → Network tab
-2. Load dashboard: `http://localhost:3000/dashboard/ur31595220`
-3. Find request to `/api/imdb-watchlist`
-4. Check response JSON for `imdbRating` field
-
-**If present**: Issue is in React component rendering
-**If missing**: Issue is in API response
-
----
-
-### Step 3: Check React Component Props
-Add console logging to `pages/dashboard.jsx`:
-
-```javascript
-useEffect(() => {
-  console.log('Watchlist items:', items.map(i => ({
-    title: i.title,
-    imdbRating: i.imdbRating,
-    hasRating: !!i.imdbRating
-  })));
-}, [items]);
-```
-
-**Expected Output**: Each item should have `imdbRating` value
-**If undefined**: Data not passing through component hierarchy
-
----
-
-### Step 4: Force Fresh Scrape
-```bash
-# Clear local cache
-rm -f data/watchlist-cache.json
-
-# Force refresh in browser
-curl "http://localhost:3000/api/imdb-watchlist?userId=ur31595220&forceRefresh=true"
-
-# Reload dashboard
-open "http://localhost:3000/dashboard/ur31595220?refresh=1"
-```
-
----
-
-### Step 5: Check for TypeScript Compilation Errors
-```bash
-npm run build
-```
-
-Look for errors related to `WatchlistItem` interface
-
----
-
-### Step 6: Verify TMDB Integration
-Check if TMDB API is returning ratings:
-
-```javascript
-// In lib/fetch-watchlist.ts, add logging:
-console.log('TMDB Metadata:', Array.from(tmdbMetadata.entries()).slice(0, 3));
-```
-
-**Expected Output**:
-```javascript
-[
-  ['the pianist-2002', { imdbRating: 8.38, poster: '...', ... }],
-  ['the shawshank redemption-1994', { imdbRating: 9.3, ... }]
-]
-```
-
----
-
-## Code Snippets for Reference
-
-### Working Rating Badge Component
-```jsx
-{item.imdbRating && item.imdbRating > 0 ? (
-  <a
-    href={`https://www.imdb.com/title/${item.imdbId}/`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 rounded-lg transition-colors shadow-md"
-  >
-    <span className="text-base">⭐</span>
-    <span className="text-sm font-bold text-gray-900">
-      {item.imdbRating.toFixed(1)}
-    </span>
-  </a>
-) : (
-  <span className="text-sm text-gray-400 dark:text-gray-500">No rating</span>
-)}
-```
-
-### TMDB Metadata Fetching
 ```typescript
-const tmdbMetadata = await getTMDBMetadataBatch(
-  allItems.map(item => ({ title: item.title, year: item.year }))
-);
+// lib/imdb-sync.ts:6-54 (trimmed)
+interface WatchlistItem {
+  imdbId: string;
+  title: string;
+  year?: string;
+  type: 'movie' | 'tv';
+  poster?: string;
+  plot?: string;
+  genres?: string[];
+  addedAt: string;
+}
 
-allItems.forEach(item => {
-  const key = `${item.title.toLowerCase()}-${item.year || 'unknown'}`;
-  const metadata = tmdbMetadata.get(key);
-  if (metadata?.imdbRating) {
-    item.imdbRating = metadata.imdbRating;
-  }
-});
+const cache: WatchlistCache = {
+  items,
+  lastUpdated: new Date().toISOString(),
+  totalItems: items.length
+};
+await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2));
 ```
+
+### Why Previous Fixes Missed This
+
+- All fixes targeted the worker/TMDB pipeline and React components, which *do* produce ratings.
+- The dashboard, however, never calls `/api/imdb-watchlist`; it stops at `/api/watchlist`, so those fixes could not surface in the UI.
+- Any sync run (manual or VPS) overwrites the cache with rating-less payloads, reintroducing the bug immediately after each deploy.
+
+## Resolution Plan
+
+1. **Unify the data source** for both the dashboard and the Stremio addon.
+   - Preferred: have the sync job reuse `fetchWatchlist(userId, { forceRefresh: true })` (or the VPS worker client) and persist the enriched objects.
+   - Alternative: point the dashboard directly at `/api/imdb-watchlist` and stop writing the legacy cache file.
+2. **Update type definitions** so `lib/imdb-sync.ts` exports the same `WatchlistItem` shape as `lib/fetch-watchlist.ts` / worker responses.
+3. **Invalidate stale cache files** once the new code ships (`rm data/watchlist-cache.json` in deployments and VPS worker cache flush).
+
+### Implementation Sketch (preferred path)
+
+```typescript
+// lib/imdb-sync.ts
+import { fetchWatchlist } from './fetch-watchlist';
+import { ensureContentTypesWithTMDB } from './tmdb';
+import type { WatchlistItem } from './fetch-watchlist';
+
+async syncWatchlist(): Promise<WatchlistCache> {
+  const userId = await this.resolveUserId(); // already derived during scraping/login
+  const freshItems = await fetchWatchlist(userId, { forceRefresh: true });
+  await ensureContentTypesWithTMDB(freshItems, '[Sync Job] TMDB refresh');
+
+  const cache: WatchlistCache = {
+    items: freshItems,
+    lastUpdated: new Date().toISOString(),
+    totalItems: freshItems.length
+  };
+  await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2));
+  return cache;
+}
+```
+
+### Verification Checklist
+
+- [ ] `npm run sync` writes `data/watchlist-cache.json` entries containing `imdbRating`, `numRatings`, and `runtime`.
+- [ ] `/api/watchlist` response shows the rating fields.
+- [ ] Dashboard renders `⭐ 8.x` badges without hard refresh tricks.
+- [ ] Regression: confirm Stremio addon still reads ratings (it already uses the enriched path).
+
+### Open Questions / Follow-ups
+
+- Does the Playwright sync still need to scrape once `fetchWatchlist` handles the heavy lifting? We could remove the custom scraper in favour of the worker entirely.
+- If we keep Playwright for authentication, ensure we persist the resolved IMDb user id so we can call `fetchWatchlist` without duplicating scraping logic.
+- Update deployment runbooks to wipe the stale cache file when deploying this fix.
 
 ## Files Modified
 
@@ -435,26 +315,25 @@ allItems.forEach(item => {
 | `pages/dashboard/[userId].jsx` | Rating badge + sync time | ✅ Updated |
 | `components/CatalogPreview.jsx` | Rating badge overlay | ✅ Updated |
 | `pages/api/stremio/.../catalog/.../[catalogId].ts` | Stremio metadata | ✅ Working |
+| `lib/imdb-sync.ts` | Sync cache writer lacks rating fields | ❌ Pending |
 
-## Next Steps for Investigation
+## Next Actions
 
-1. **Clear all caches** (local, Redis, browser) and force fresh scrape
-2. **Add comprehensive logging** to track data flow from API to UI
-3. **Check VPS worker** to ensure it has latest code with rating support
-4. **Verify TMDB API key** is configured and returning data
-5. **Test with different user IDs** to rule out data-specific issues
-6. **Check browser console** for React errors or warnings
-7. **Review Next.js build output** for any optimization warnings
+1. Refactor `lib/imdb-sync.ts` to persist the enriched `WatchlistItem` shape (see plan above).
+2. Decide whether the dashboard should hit `/api/imdb-watchlist` directly or continue reading the cache file once it contains ratings.
+3. Remove existing `data/watchlist-cache.json` artifacts in all environments after deploying the fix.
+4. Update ops docs/deployment scripts to ensure the cache only ever contains enriched data going forward.
 
 ## Related Documentation
 
 - **Architecture**: `/Context/Ultimate-Workflow-Fix.md`
 - **TMDB Integration**: `lib/tmdb.ts`
 - **Watchlist Scraping**: `lib/fetch-watchlist.ts`
+- **Legacy Sync Service**: `lib/imdb-sync.ts`
 - **Version History**: See git log on `feature/imdb-ratings` branch
 
 ---
 
-**Last Updated**: 2025-10-06
+**Last Updated**: 2025-10-07
 **Version**: 3.7.1
-**Developer Notes**: All interface fixes and UI updates have been implemented correctly. The issue appears to be related to data flow or caching rather than code structure. Recommend starting with Step 1-3 of debugging steps above to isolate where ratings are being lost in the pipeline.
+**Developer Notes**: Ratings disappear because the dashboard only consumes the legacy `watchlist-cache.json` written by `lib/imdb-sync.ts`. Implement the resolution plan above so the cache (or the UI endpoint) uses the enriched data that already contains `imdbRating`.
