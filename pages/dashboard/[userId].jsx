@@ -463,13 +463,13 @@ export default function UserDashboard() {
                           </div>
                         )}
 
-                        {/* IMDb Rating Badge on poster */}
+                        {/* IMDb Rating Badge on poster - shows on hover */}
                         {item.imdbRating && item.imdbRating > 0 && (
                           <a
                             href={`https://www.imdb.com/title/${item.imdbId}/`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-yellow-500/95 hover:bg-yellow-400 backdrop-blur-sm px-2.5 py-1 rounded-md shadow-lg transition-all duration-200 hover:scale-110 z-10"
+                            className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-yellow-500/95 hover:bg-yellow-400 backdrop-blur-sm px-2.5 py-1 rounded-md shadow-lg transition-all duration-300 hover:scale-110 z-10 opacity-0 group-hover:opacity-100"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="flex items-center gap-1">
@@ -482,22 +482,15 @@ export default function UserDashboard() {
                         )}
                       </div>
 
-                      {/* Rating badge below poster (replaces title) */}
+                      {/* Movie title below poster */}
                       <div className="mt-2 text-center">
-                        {item.imdbRating && item.imdbRating > 0 ? (
-                          <a
-                            href={`https://www.imdb.com/title/${item.imdbId}/`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-yellow-500/90 hover:bg-yellow-400 rounded-md transition-colors"
-                          >
-                            <span className="text-sm">⭐</span>
-                            <span className="text-xs font-bold text-gray-900">
-                              {item.imdbRating.toFixed(1)}
-                            </span>
-                          </a>
-                        ) : (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">No rating</span>
+                        <h3 className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 px-1">
+                          {item.name || item.title}
+                        </h3>
+                        {item.year && (
+                          <span className="text-xs text-gray-500 dark:text-gray-500">
+                            {item.year}
+                          </span>
                         )}
                       </div>
                     </div>
