@@ -10,6 +10,11 @@ interface WatchlistItem {
   poster?: string;
   plot?: string;
   genres?: string[];
+  imdbRating?: number;
+  numRatings?: number;
+  runtime?: number;
+  popularity?: number;
+  userRating?: number;
   addedAt: string;
 }
 

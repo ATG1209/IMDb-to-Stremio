@@ -433,24 +433,22 @@ export default function Dashboard() {
                           )}
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-1 truncate">
-                            {item.title}
-                          </h4>
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">
-                              {item.type === 'movie' ? 'Película' : 'Serie'}
-                            </span>
-                            {item.year && <span>{item.year}</span>}
-                          </div>
-                          {item.genres && item.genres.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {item.genres.slice(0, 2).map((genre, i) => (
-                                <span key={i} className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 text-xs rounded">
-                                  {genre}
-                                </span>
-                              ))}
-                            </div>
+                        <div className="flex-1 min-w-0 flex items-center justify-center">
+                          {/* Show ONLY rating - no title */}
+                          {item.imdbRating && item.imdbRating > 0 ? (
+                            <a
+                              href={`https://www.imdb.com/title/${item.imdbId}/`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 rounded-lg transition-colors shadow-md"
+                            >
+                              <span className="text-base">⭐</span>
+                              <span className="text-sm font-bold text-gray-900">
+                                {item.imdbRating.toFixed(1)}
+                              </span>
+                            </a>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-gray-500">No rating</span>
                           )}
                         </div>
                       </div>
