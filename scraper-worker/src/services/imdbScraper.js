@@ -927,7 +927,7 @@ export class ImdbScraper {
 
     try {
       // Clean titles by removing IMDb numbering prefix (e.g., "410. Black Book" -> "Black Book")
-      const cleanTitle = (title) => {
+const cleanTitle = (title) => {
         if (!title) return title;
         // Remove numbering like "410. " or "1. " from the start
         return title.replace(/^\d+\.\s*/, '').trim();
@@ -937,25 +937,50 @@ export class ImdbScraper {
         items.map(item => ({ title: cleanTitle(item.title), year: item.year }))
       );
 
-      const posters = await tmdbService.getPosterBatch(
+      const metadata = await tmdbService.getMetadataBatch(
         items.map(item => ({ title: cleanTitle(item.title), year: item.year }))
       );
 
       items.forEach(item => {
         const cleanedTitle = cleanTitle(item.title);
         const key = `${cleanedTitle}_${item.year || 'unknown'}`;
+        
         if (contentTypes.has(key)) {
           item.type = contentTypes.get(key);
         }
-        if (posters.has(key) && !item.poster) {
-          item.poster = posters.get(key);
+        
+        if (metadata.has(key)) {
+          const meta = metadata.get(key);
+          
+          if (meta.poster && !item.poster) {
+            item.poster = meta.poster;
+          }
+          
+          if (meta.imdbRating) {
+            item.imdbRating = meta.imdbRating;
+          }
+          
+          if (meta.numRatings) {
+            item.numRatings = meta.numRatings;
+          }
+          
+          if (meta.runtime) {
+            item.runtime = meta.runtime;
+          }
+          
+          if (meta.popularity) {
+            item.popularity = meta.popularity;
+          }
         }
       });
 
       const posterCount = items.filter(item => item.poster).length;
+      const ratingCount = items.filter(item => item.imdbRating).length;
+      
       logger.info('TMDB enhancement applied', {
         total: items.length,
-        posters: posterCount
+        posters: posterCount,
+        ratings: ratingCount
       });
 
     } catch (error) {
