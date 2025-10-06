@@ -69,28 +69,28 @@ export default function Home() {
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-200px)]">
         <div className="w-full max-w-lg mx-auto px-4">
           {/* Hero Section */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 rounded-2xl mb-6 shadow-2xl shadow-purple-500/25 animate-bounce">
+          <div className="text-center mb-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 via-pink-500 to-indigo-500 rounded-2xl mb-8 shadow-2xl shadow-purple-500/25 animate-bounce">
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
             </div>
-            
-            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 bg-clip-text text-transparent mb-4 leading-tight">
+
+            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-600 via-pink-500 to-indigo-600 bg-clip-text text-transparent mb-6 leading-tight">
               Connect Your
               <br />
               IMDb Watchlist
             </h1>
-            
-            <p className="text-xl text-gray-600 dark:text-gray-100 mb-2 max-w-md mx-auto">
+
+            <p className="text-xl text-gray-600 dark:text-gray-100 mb-8 max-w-md mx-auto">
               Transform your IMDb watchlist into a personalized Stremio addon
             </p>
 
-            <p className="text-sm text-gray-500 dark:text-gray-300 mt-3 max-w-md mx-auto">
+            <p className="text-sm text-gray-500 dark:text-gray-300 mt-6 mb-8 max-w-md mx-auto">
               Your dashboard will be at: <code className="px-2 py-1 bg-purple-100 dark:bg-purple-800 rounded text-purple-700 dark:text-purple-200 font-mono">/dashboard/ur12345678</code>
             </p>
-            
-            <div className="flex flex-wrap justify-center gap-4 text-sm">
+
+            <div className="flex flex-wrap justify-center gap-4 text-sm mt-6">
               <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-100 rounded-full">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
