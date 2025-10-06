@@ -482,17 +482,6 @@ export default function UserDashboard() {
                         )}
                       </div>
 
-                      {/* Movie title below poster */}
-                      <div className="mt-2 text-center">
-                        <h3 className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 px-1">
-                          {item.name || item.title}
-                        </h3>
-                        {item.year && (
-                          <span className="text-xs text-gray-500 dark:text-gray-500">
-                            {item.year}
-                          </span>
-                        )}
-                      </div>
                     </div>
                   ))}
                 </div>
