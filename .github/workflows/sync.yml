@@ -1,10 +1,14 @@
-name: Sync IMDb Watchlist
+name: Sync IMDb Watchlist (DISABLED)
+
+# DISABLED: Sync is now handled by VPS worker (37.27.92.76:3003)
+# The VPS worker automatically caches watchlist data with 24-hour TTL
+# No scheduled sync needed - data refreshes on-demand when users access the addon
 
 on:
-  schedule:
-    # Runs every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Allow manual trigger
+  # schedule:
+  #   # Runs every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+  #   - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger for testing only
 
 env:
   VERCEL_APP_URL: ${{ secrets.VERCEL_APP_URL || 'https://imdb-stremio.vercel.app' }}
