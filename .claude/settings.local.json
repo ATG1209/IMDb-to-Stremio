@@ -61,7 +61,11 @@
       "mcp__chrome-devtools__click",
       "mcp__chrome-devtools__wait_for",
       "Bash(timeout 20 bash -c 'while true; do v=$(curl -s \"\"https://imdb-migrator.vercel.app/api/stremio/ur31595220/manifest.json\"\" | jq -r \"\".version\"\" 2>/dev/null); echo \"\"Version: $v\"\"; [ \"\"$v\"\" = \"\"3.4.0\"\" ] && break; sleep 5; done')",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(ssh -o StrictHostKeyChecking=no root@37.27.92.76 \"tail -100 /root/.pm2/logs/imdb-worker-error.log\")",
+      "Bash(ssh:*)",
+      "Bash(timeout:*)",
+      "Bash(git branch:*)"
     ],
     "deny": [],
     "ask": []
